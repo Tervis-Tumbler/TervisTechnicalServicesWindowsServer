@@ -1,37 +1,16 @@
 ﻿Add-PSSnapin Microsoft.Exchange.Management.PowerShell.E2010
 
-<# Before using this you will need to initialize the PasswordState.psm1 module and create the credential files below.
-Get-Credential | Export-Clixml $env:USERPROFILE\Office365EmailCredential.txt    
-Get-Credential | Export-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-
-This also relies on https://github.com/devblackops/PasswordState
-#>
-
-<# Reference: https://github.com/devblackops/PasswordState/blob/master/README.md
-    
-    First you create a credential object using PowerShells Get-Credential cmdlet. You will be prompted to input a username/password, 
-    in username put in the name you want to call the credential file (Usually something that refers to, what the actual API key is 
-    giving you access to, a password list for instance), and in the password field enter your APIkey. If you do not specify a location, 
-    the credentials will be stored in the location you specified when you ran Initialize-PasswordStateRepository
-
-    $Initialize-PasswordStateRepository -ApiEndpoint 'https://passwordstate/api' -CredentialRepository 'C:\PasswordStateCreds'
-    $Cred = Get-Credential
-    Export-PasswordStateApiKey -ApiKey $cred
-
-    Lets say you entered "NewUser" as Username and "52e7c9d84hb7fa33f6b123dac823e956" as password, this will result in a file 
-    called ADUserList.cred under the directory C:\PasswordStateCreds
-
-    If you at a later time want to use that credential you just call: Import-PasswordStateApiKey
-
-    $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
-
-    Now you can use that credential object (API key) to connect to PasswordState In the below example, the API key is read from 
-    the $ADUserListCred variable, and URL to PasswordState is read from the URL you typed in when you ran Initialize-PasswordStateRepository
-
-    $lists = Get-PasswordStateList -SystemApiKey $sysKey -Endpoint 'https://passwordstate/api'
-
-    New-PasswordStatePassword -ApiKey $key -PasswordListId 78 -Title 'testPassword' -Username 'testPassword' -Description 'this is a test' -GeneratePassword
-#>
+function Install-TervisTechnicalServicesWindowsServer {
+    param(
+        [System.Management.Automation.PSCredential]$Office365Credential = $(get-credential -message "Please supply the credentials to access ExchangeOnline. Username must be in the form UserName@Domain.com"),
+        [System.Management.Automation.PSCredential]$InternalCredential = $(get-credential -message "Please supply the credentials to access internal resources. Username must be in the form DOMAIN\username"),
+        [System.Management.Automation.PSCredential]$PasswordStateCredential = $(get-credential -message 'Enter "NewUser" in the username field. Enter the API key for PasswordState in the password field. This can be found under Administration > System Settings > API Keys')
+    )
+    $Office365Credential | Export-Clixml $env:USERPROFILE\Office365EmailCredential.txt    
+    $InternalCredential | Export-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+    Initialize-PasswordStateRepository -ApiEndpoint 'https://passwordstate/api' -CredentialRepository 'C:\PasswordStateCreds'
+    Export-PasswordStateApiKey -ApiKey $PasswordStateCredential
+}
 
 function _GetDefault {
     [cmdletbinding()]
@@ -518,7 +497,9 @@ function New-TervisWindowsUser{
         $Mailboxes = Get-CloudMailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
             where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity} | 
             Select -ExpandProperty LegacyExchangeDN
-        $Search.Sources.Add($Mailboxes)
+        foreach ($Mailbox in $Mailboxes) {
+            $Search.Sources.Add($Mailbox)
+        }
         Set-CloudMailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources
     }
 }
