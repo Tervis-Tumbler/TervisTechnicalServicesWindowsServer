@@ -397,7 +397,7 @@ function New-TervisWindowsUser{
     [string]$FirstNameLastInitial = $FirstName + $LastName[0]
 
     If (!(Get-ADUser -filter {sAMAccountName -eq $FirstInitialLastName})) {
-        [string]$UserName = $FirstInitialLastName
+        [string]$UserName = $FirstInitialLastName.substring(0).tolower()
         Write-Host "UserName is $UserName" -ForegroundColor Green
     } elseif (!(Get-ADUser -filter {sAMAccountName -eq $FirstNameLastInitial})) {
         [string]$UserName = $FirstNameLastInitial
@@ -412,7 +412,7 @@ function New-TervisWindowsUser{
 
     If (!($UserName -eq $null)) {
 
-        [string]$AdDomainNetBiosName = Get-ADDomain | Select -ExpandProperty NetBIOSName
+        [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
         [string]$Company = $AdDomainNetBiosName.substring(0,1).toupper()+$AdDomainNetBiosName.substring(1).tolower()
         [string]$DisplayName = $FirstName + ' ' + $LastName
         [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
@@ -425,7 +425,7 @@ function New-TervisWindowsUser{
         $PW= Get-TempPassword –length 8 –sourcedata $ascii
         $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
 
-        $Office365Credential = Import-Clixml $env:USERPROFILE\ExchangeOnlineCredential.txt
+        $Office365Credential = Import-Clixml $env:USERPROFILE\Office365EmailCredential.txt
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
 
         New-ADUser `
