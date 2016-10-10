@@ -472,7 +472,7 @@ function New-TervisWindowsUser{
 
         Connect-MsolService -Credential $Office365Credential
         [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-        [string]$License = Get-MsolAccountSku | Where ActiveUnits -LT 10000 | Select -ExpandProperty AccountSkuId
+        [string]$License = Get-MsolAccountSku | Where {$_.ActiveUnits -LT 10000 -and $_.AccountSkuID -like "*ENTERPRISEPACK"} | Select -ExpandProperty AccountSkuId
 
         Set-MsolUser -UserPrincipalName $UserPrincipalName -UsageLocation 'US'
         Set-MsolUserLicense -UserPrincipalName $UserPrincipalName -AddLicenses $License
@@ -495,7 +495,7 @@ function New-TervisWindowsUser{
         $Search = Get-CloudMailboxSearch | where InPlaceHoldEnabled -eq $true
         [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
         $Mailboxes = Get-CloudMailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
-            where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity} | 
+            where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"} | 
             Select -ExpandProperty LegacyExchangeDN
         foreach ($Mailbox in $Mailboxes) {
             $Search.Sources.Add($Mailbox)
