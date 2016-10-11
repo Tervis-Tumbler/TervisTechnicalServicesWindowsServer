@@ -385,7 +385,7 @@ function New-TervisWindowsUser{
     param(
         [parameter(mandatory)]$FirstName,
         [parameter(mandatory)]$LastName,
-        [parameter(mandatory)]$MiddleInitial,
+        [parameter()]$MiddleInitial,
         [parameter(mandatory)]$Manager,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
