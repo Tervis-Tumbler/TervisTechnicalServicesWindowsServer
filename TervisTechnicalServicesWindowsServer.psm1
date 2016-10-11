@@ -389,7 +389,6 @@ function New-TervisWindowsUser{
         [parameter(mandatory)]$Manager,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
-        [parameter(mandatory)]$EmployeeId,
         [parameter(mandatory)]$SourceUser
     )
 
@@ -428,11 +427,18 @@ function New-TervisWindowsUser{
         $Office365Credential = Import-Clixml $env:USERPROFILE\Office365EmailCredential.txt
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
 
+        if ($MiddleInitial) {
+            [string]$Initials = '-Initials ' + $MiddleInitial
+        } else {
+            $Initials = $null
+        }
+
         New-ADUser `
             -SamAccountName $Username `
             -Name $DisplayName `
             -GivenName $FirstName `
             -Surname $LastName `
+            $Initials `
             -UserPrincipalName $UserPrincipalName `
             -AccountPassword $SecurePW `
             -ChangePasswordAtLogon $true `
@@ -442,7 +448,6 @@ function New-TervisWindowsUser{
             -Office $Department `
             -Description $Title `
             -Title $Title `
-            -EmployeeID $EmployeeId `
             -Manager $ManagerDN
 
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
