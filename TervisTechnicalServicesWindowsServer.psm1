@@ -386,10 +386,10 @@ function New-TervisWindowsUser{
         [parameter(mandatory)]$FirstName,
         [parameter(mandatory)]$LastName,
         [parameter()]$MiddleInitial,
-        [parameter(mandatory)]$Manager,
+        [parameter(mandatory)]$ManagerUserName,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
-        [parameter(mandatory)]$SourceUser
+        [parameter(mandatory)]$SourceUserName
     )
 
     [string]$FirstInitialLastName = $FirstName[0] + $LastName
@@ -416,8 +416,8 @@ function New-TervisWindowsUser{
         [string]$DisplayName = $FirstName + ' ' + $LastName
         [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
         [string]$LogonName = $AdDomainNetBiosName + '\' + $username
-        [string]$Path = Get-ADUser $SourceUser -Properties distinguishedname,cn | select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | Select -ExpandProperty ParentContainer
-        $ManagerDN = Get-ADUser $Manager | Select -ExpandProperty DistinguishedName
+        [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | Select -ExpandProperty ParentContainer
+        $ManagerDN = Get-ADUser $ManagerUserName | Select -ExpandProperty DistinguishedName
 
         $ascii=$NULL;
         For ($a=48;$a –le 122;$a++) {$ascii+=,[char][byte]$a }
@@ -472,7 +472,7 @@ function New-TervisWindowsUser{
         [string]$MailboxDatabase = Get-MailboxDatabase | Where Name -NotLike "Temp*" | Select -Index 0 | Select -ExpandProperty Name
         Enable-Mailbox -Identity $UserPrincipalName -Database $MailboxDatabase
 
-        $Groups = Get-ADUser $SourceUser -Properties MemberOf | Select -ExpandProperty MemberOf
+        $Groups = Get-ADUser $SourceUserName -Properties MemberOf | Select -ExpandProperty MemberOf
 
         Foreach ($Group in $Groups) {
             Add-ADGroupMember -Identity $group -Members $UserName
