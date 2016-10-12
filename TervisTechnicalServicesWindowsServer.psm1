@@ -428,27 +428,39 @@ function New-TervisWindowsUser{
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
 
         if ($MiddleInitial) {
-            [string]$Initials = '-Initials ' + $MiddleInitial
+            New-ADUser `
+                -SamAccountName $Username `
+                -Name $DisplayName `
+                -GivenName $FirstName `
+                -Surname $LastName `
+                -Initials $MiddleInitial `
+                -UserPrincipalName $UserPrincipalName `
+                -AccountPassword $SecurePW `
+                -ChangePasswordAtLogon $true `
+                -Path $Path `
+                -Company $Company `
+                -Department $Department `
+                -Office $Department `
+                -Description $Title `
+                -Title $Title `
+                -Manager $ManagerDN
         } else {
-            $Initials = $null
+            New-ADUser `
+                -SamAccountName $Username `
+                -Name $DisplayName `
+                -GivenName $FirstName `
+                -Surname $LastName `
+                -UserPrincipalName $UserPrincipalName `
+                -AccountPassword $SecurePW `
+                -ChangePasswordAtLogon $true `
+                -Path $Path `
+                -Company $Company `
+                -Department $Department `
+                -Office $Department `
+                -Description $Title `
+                -Title $Title `
+                -Manager $ManagerDN
         }
-
-        New-ADUser `
-            -SamAccountName $Username `
-            -Name $DisplayName `
-            -GivenName $FirstName `
-            -Surname $LastName `
-            $Initials `
-            -UserPrincipalName $UserPrincipalName `
-            -AccountPassword $SecurePW `
-            -ChangePasswordAtLogon $true `
-            -Path $Path `
-            -Company $Company `
-            -Department $Department `
-            -Office $Department `
-            -Description $Title `
-            -Title $Title `
-            -Manager $ManagerDN
 
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
