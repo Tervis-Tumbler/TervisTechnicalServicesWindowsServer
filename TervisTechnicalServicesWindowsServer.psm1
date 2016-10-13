@@ -389,7 +389,8 @@ function New-TervisWindowsUser{
         [parameter(mandatory)]$ManagerUserName,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
-        [parameter(mandatory)]$SourceUserName
+        [parameter(mandatory)]$SourceUserName,
+        [parameter(mandatory)]$AzureADConnectComputerName
     )
 
     [string]$FirstInitialLastName = $FirstName[0] + $LastName
@@ -484,10 +485,15 @@ function New-TervisWindowsUser{
         Start-Sleep 30
 
         Write-Verbose 'Starting Sync From AD to Office 365 & Azure AD'
-        Invoke-Command -ComputerName 'DirSync' -ScriptBlock {Start-ScheduledTask 'Azure AD Sync Scheduler'}
+        Invoke-Command -ComputerName $AzureADConnectComputerName -ScriptBlock {Start-ScheduledTask 'Azure AD Sync Scheduler'}
         Start-Sleep 30
 
         Connect-MsolService -Credential $Office365Credential
+
+        While (!(Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
+            Start-Sleep 30
+        }
+
         [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
         [string]$License = Get-MsolAccountSku | Where {$_.ActiveUnits -LT 10000 -and $_.AccountSkuID -like "*ENTERPRISEPACK"} | Select -ExpandProperty AccountSkuId
 
