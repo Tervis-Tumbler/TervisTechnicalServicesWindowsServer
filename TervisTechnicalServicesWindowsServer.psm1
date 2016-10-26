@@ -519,7 +519,8 @@ function New-TervisWindowsUser{
 
         Set-cloudMailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
         Enable-remoteMailbox $UserPrincipalName -Archive
-        Get-CloudMailbox $UserPrincipalName -ResultSize Unlimited | Set-CloudClutter -Enable $false
+        Set-CloudClutter -Identity $UserPrincipalName -Enable $false
+        Set-CloudFocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 
         $Search = Get-CloudMailboxSearch | where InPlaceHoldEnabled -eq $true
         [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
@@ -570,7 +571,8 @@ function Move-MailboxToOffice365 {
     }
 
     Set-cloudMailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
-    Get-CloudMailbox $UserPrincipalName -ResultSize Unlimited | Set-CloudClutter -Enable $false
+    Set-CloudClutter -Identity $UserPrincipalName -Enable $false
+    Set-CloudFocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 
     if ($EnableArchive -eq $True) {
         Enable-remoteMailbox $UserPrincipalName -Archive
