@@ -513,32 +513,32 @@ function New-TervisWindowsUser{
         if ($Connected -eq $false) {
             Write-Verbose "Connect to Exchange Online"
             $Session = New-PSSession -ConfigurationName Microsoft.Exchange -Authentication Basic -ConnectionUri https://ps.outlook.com/powershell -AllowRedirection:$true -Credential $Office365Credential
-            Import-PSSession $Session -Prefix 'Cloud' -DisableNameChecking -AllowClobber
+            Import-PSSession $Session -Prefix 'O365' -DisableNameChecking -AllowClobber
         }
 
-        [string]$InternalMailServerPublicDNS = Get-CloudOutboundConnector | Select -ExpandProperty SmartHosts
-        New-CloudMoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+        [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Select -ExpandProperty SmartHosts
+        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
         Write-Verbose "Migrating the mailbox"
-        While (!((Get-CloudMoveRequest $DisplayName).Status -eq 'Completed')) {
-            Get-CloudMoveRequestStatistics $UserPrincipalName | Select PercentComplete
+        While (!((Get-O365MoveRequest $DisplayName).Status -eq 'Completed')) {
+            Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
             Start-Sleep 60
         }
 
-        Set-cloudMailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
         Enable-remoteMailbox $UserPrincipalName -Archive
-        Set-CloudClutter -Identity $UserPrincipalName -Enable $false
-        Set-CloudFocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
+        Set-O365Clutter -Identity $UserPrincipalName -Enable $false
+        Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 
-        $Search = Get-CloudMailboxSearch | where InPlaceHoldEnabled -eq $true
+        $Search = Get-O365MailboxSearch | where InPlaceHoldEnabled -eq $true
         [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
-        $Mailboxes = Get-CloudMailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
+        $Mailboxes = Get-O365Mailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
             where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"} | 
             Select -ExpandProperty LegacyExchangeDN
         foreach ($Mailbox in $Mailboxes) {
             $Search.Sources.Add($Mailbox)
         }
-        Set-CloudMailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
+        Set-O365MailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
     }
 }
 
@@ -574,29 +574,29 @@ function Move-MailboxToOffice365 {
     if ($Connected -eq $false) {
         Write-Verbose "Connect to Exchange Online"
         $Session = New-PSSession -ConfigurationName Microsoft.Exchange -Authentication Basic -ConnectionUri https://ps.outlook.com/powershell -AllowRedirection:$true -Credential $Office365Credential
-        Import-PSSession $Session -Prefix 'Cloud' -DisableNameChecking -AllowClobber
+        Import-PSSession $Session -Prefix 'O365' -DisableNameChecking -AllowClobber
     }
 
-    [string]$InternalMailServerPublicDNS = Get-CloudOutboundConnector | Select -ExpandProperty SmartHosts
-    New-CloudMoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+    [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Select -ExpandProperty SmartHosts
+    New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
     Write-Verbose "Migrating the mailbox"
-    While (!((Get-CloudMoveRequest $DisplayName).Status -eq 'Completed')) {
-        Get-CloudMoveRequestStatistics $UserPrincipalName | Select PercentComplete
+    While (!((Get-O365MoveRequest $DisplayName).Status -eq 'Completed')) {
+        Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
         Start-Sleep 60
     }
 
-    Set-cloudMailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
-    Set-CloudClutter -Identity $UserPrincipalName -Enable $false
-    Set-CloudFocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
+    Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+    Set-O365Clutter -Identity $UserPrincipalName -Enable $false
+    Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 
     if ($EnableArchive -eq $True) {
         Enable-remoteMailbox $UserPrincipalName -Archive
     }
 
-    $Search = Get-CloudMailboxSearch | where InPlaceHoldEnabled -eq $true
+    $Search = Get-O365MailboxSearch | where InPlaceHoldEnabled -eq $true
     [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
-    $Mailboxes = Get-CloudMailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
+    $Mailboxes = Get-O365Mailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
         where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"}
     foreach ($Mailbox in $Mailboxes) {
         [string]$LegacyDN = $Mailbox | Select -ExpandProperty LegacyExchangeDN
@@ -607,5 +607,5 @@ function Move-MailboxToOffice365 {
         }
     }
 
-    Set-CloudMailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
+    Set-O365MailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
 }
