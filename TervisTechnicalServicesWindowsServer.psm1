@@ -502,10 +502,18 @@ function New-TervisWindowsUser{
 
         Write-Verbose "Connect to Exchange Online"
         $Sessions = Get-PsSession
-        if (!($Sessions.ComputerName -contains 'ps.outlook.com' -and $Sessions.ConfigurationName -contains 'Microsoft.Exchange')) {
+        $Connected = $false
+        Foreach ($Session in $Sessions) {
+            if ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Opened') {
+                $Connected = $true
+            } elseif ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Broken') {
+                Remove-PSSession $Session
+            }
+        }
+        if ($Connected -eq $false) {
             Write-Verbose "Connect to Exchange Online"
             $Session = New-PSSession -ConfigurationName Microsoft.Exchange -Authentication Basic -ConnectionUri https://ps.outlook.com/powershell -AllowRedirection:$true -Credential $Office365Credential
-            Import-PSSession $Session -Prefix Cloud -DisableNameChecking
+            Import-PSSession $Session -Prefix 'Cloud' -DisableNameChecking -AllowClobber
         }
 
         [string]$InternalMailServerPublicDNS = Get-CloudOutboundConnector | Select -ExpandProperty SmartHosts
@@ -555,10 +563,18 @@ function Move-MailboxToOffice365 {
 
     Write-Verbose "Connect to Exchange Online"
     $Sessions = Get-PsSession
-    if (!($Sessions.ComputerName -contains 'ps.outlook.com' -and $Sessions.ConfigurationName -contains 'Microsoft.Exchange')) {
+    $Connected = $false
+    Foreach ($Session in $Sessions) {
+        if ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Opened') {
+            $Connected = $true
+        } elseif ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Broken') {
+            Remove-PSSession $Session
+        }
+    }
+    if ($Connected -eq $false) {
         Write-Verbose "Connect to Exchange Online"
         $Session = New-PSSession -ConfigurationName Microsoft.Exchange -Authentication Basic -ConnectionUri https://ps.outlook.com/powershell -AllowRedirection:$true -Credential $Office365Credential
-        Import-PSSession $Session -Prefix Cloud -DisableNameChecking
+        Import-PSSession $Session -Prefix 'Cloud' -DisableNameChecking -AllowClobber
     }
 
     [string]$InternalMailServerPublicDNS = Get-CloudOutboundConnector | Select -ExpandProperty SmartHosts
@@ -581,10 +597,14 @@ function Move-MailboxToOffice365 {
     $Search = Get-CloudMailboxSearch | where InPlaceHoldEnabled -eq $true
     [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
     $Mailboxes = Get-CloudMailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
-        where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"} | 
-        Select -ExpandProperty LegacyExchangeDN
+        where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"}
     foreach ($Mailbox in $Mailboxes) {
-        $Search.Sources.Add($Mailbox)
+        [string]$LegacyDN = $Mailbox | Select -ExpandProperty LegacyExchangeDN
+        [string]$MailboxUserPrincipalName = $Mailbox | Select -ExpandProperty UserPrincipalName
+        $License = Get-MsolUser -UserPrincipalName $MailboxUserPrincipalName | Select -ExpandProperty Licenses
+        If ($License -contains '*:ENTERPRISEPACK'){
+            $Search.Sources.Add($LegacyDN)
+        }
     }
 
     Set-CloudMailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
