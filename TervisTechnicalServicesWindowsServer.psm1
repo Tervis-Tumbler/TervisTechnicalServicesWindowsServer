@@ -568,7 +568,8 @@ function New-TervisWindowsUser{
                 -Office $Department `
                 -Description $Title `
                 -Title $Title `
-                -Manager $ManagerDN
+                -Manager $ManagerDN `
+                -Enabled
         } else {
             New-ADUser `
                 -SamAccountName $Username `
@@ -584,9 +585,10 @@ function New-TervisWindowsUser{
                 -Office $Department `
                 -Description $Title `
                 -Title $Title `
-                -Manager $ManagerDN
+                -Manager $ManagerDN `
+                -Enabled
         }
-
+        
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
