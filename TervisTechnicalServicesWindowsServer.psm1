@@ -588,7 +588,7 @@ function New-TervisWindowsUser{
                 -Manager $ManagerDN `
                 -Enabled
         }
-        
+
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
@@ -651,20 +651,10 @@ function New-TervisWindowsUser{
             Start-Sleep 60
         }
 
-        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
         Enable-remoteMailbox $UserPrincipalName -Archive
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
         Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
-
-        $Search = Get-O365MailboxSearch | where InPlaceHoldEnabled -eq $true
-        [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
-        $Mailboxes = Get-O365Mailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
-            where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"} | 
-            Select -ExpandProperty LegacyExchangeDN
-        foreach ($Mailbox in $Mailboxes) {
-            $Search.Sources.Add($Mailbox)
-        }
-        Set-O365MailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
     }
 }
 
@@ -712,26 +702,11 @@ function Move-MailboxToOffice365 {
         Start-Sleep 60
     }
 
-    Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+    Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
     Set-O365Clutter -Identity $UserPrincipalName -Enable $false
     Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 
     if ($EnableArchive -eq $True) {
         Enable-remoteMailbox $UserPrincipalName -Archive
     }
-
-    $Search = Get-O365MailboxSearch | where InPlaceHoldEnabled -eq $true
-    [string]$InPlaceHoldIdentity = $Search.InPlaceHoldIdentity
-    $Mailboxes = Get-O365Mailbox –Resultsize Unlimited –IncludeInactiveMailbox | 
-        where {$_.RecipientTypeDetails -eq 'UserMailbox' -and $_.InPlaceHolds -notcontains $InPlaceHoldIdentity -and $_.MailboxPlan -notlike "ExchangeOnlineDeskless*"}
-    foreach ($Mailbox in $Mailboxes) {
-        [string]$LegacyDN = $Mailbox | Select -ExpandProperty LegacyExchangeDN
-        [string]$MailboxUserPrincipalName = $Mailbox | Select -ExpandProperty UserPrincipalName
-        $License = Get-MsolUser -UserPrincipalName $MailboxUserPrincipalName | Select -ExpandProperty Licenses
-        If ($License -contains '*:ENTERPRISEPACK'){
-            $Search.Sources.Add($LegacyDN)
-        }
-    }
-
-    Set-O365MailboxSearch "In-Place Hold" -SourceMailboxes $Search.Sources -Confirm:$False
 }
