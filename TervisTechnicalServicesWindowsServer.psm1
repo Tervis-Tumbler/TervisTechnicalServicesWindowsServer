@@ -611,7 +611,7 @@ function New-TervisWindowsUser{
         Start-Sleep 30
 
         Write-Verbose 'Starting Sync From AD to Office 365 & Azure AD'
-        Invoke-Command -ComputerName $AzureADConnectComputerName -ScriptBlock {Start-ScheduledTask 'Azure AD Sync Scheduler'}
+        Invoke-Command -ComputerName $AzureADConnectComputerName -ScriptBlock {Start-ADSyncSyncCycle -PolicyType Delta}
         Start-Sleep 30
 
         Connect-MsolService -Credential $Office365Credential
