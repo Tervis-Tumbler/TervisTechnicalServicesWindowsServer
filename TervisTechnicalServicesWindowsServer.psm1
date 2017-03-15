@@ -516,7 +516,8 @@ function New-TervisWindowsUser{
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
         [parameter(mandatory)]$SourceUserName,
-        [parameter(mandatory)]$AzureADConnectComputerName
+        [parameter(mandatory)]$AzureADConnectComputerName,
+        [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
 
     [string]$FirstInitialLastName = $FirstName[0] + $LastName
@@ -621,7 +622,19 @@ function New-TervisWindowsUser{
         }
 
         [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-        [string]$License = Get-MsolAccountSku | Where {$_.ActiveUnits -LT 10000 -and $_.AccountSkuID -like "*ENTERPRISEPACK"} | Select -ExpandProperty AccountSkuId
+        if ($UserHasTheirOwnDedicatedComputer) {
+            $E3Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*ENTERPRISEPACK"}
+            [string]$License = $E3Licenses | Select -ExpandProperty AccountSkuId
+            if ($E3Licenses.ConsumedUnits -ge $E3Licenses.ActiveUnits) {
+                Throw "There are not any E3 licenses available to assign to this user."
+            }
+        } else {
+            $E1Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*STANDARDPACK"}
+            [string]$License = $E1Licenses | Select -ExpandProperty AccountSkuId
+            if ($E1Licenses.ConsumedUnits -ge $E1Licenses.ActiveUnits) {
+                Throw "There are not any E1 licenses available to assign to this user."
+            }
+        }
 
         Set-MsolUser -UserPrincipalName $UserPrincipalName -UsageLocation 'US'
         Set-MsolUserLicense -UserPrincipalName $UserPrincipalName -AddLicenses $License
@@ -652,7 +665,10 @@ function New-TervisWindowsUser{
         }
 
         Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
-        Enable-remoteMailbox $UserPrincipalName -Archive
+        
+        if ($UserHasTheirOwnDedicatedComputer) {
+            Enable-remoteMailbox $UserPrincipalName -Archive
+        }
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
         Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
     }
@@ -661,7 +677,8 @@ function New-TervisWindowsUser{
 function Move-MailboxToOffice365 {
     param(
         [parameter(mandatory)]$UserPrincipalName,
-        [Switch]$EnableArchive = $False
+        [Switch]$EnableArchive = $False,
+        [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
 
     [String]$DisplayName = Get-ADUser $UserPrincipalName.Split('@')[0] | Select -ExpandProperty Name
@@ -672,7 +689,19 @@ function Move-MailboxToOffice365 {
     Connect-MsolService -Credential $Office365Credential
 
     [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-    [string]$License = Get-MsolAccountSku | Where {$_.ActiveUnits -LT 10000 -and $_.AccountSkuID -like "*ENTERPRISEPACK"} | Select -ExpandProperty AccountSkuId
+    if ($UserHasTheirOwnDedicatedComputer) {
+        $E3Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*ENTERPRISEPACK"}
+        [string]$License = $E3Licenses | Select -ExpandProperty AccountSkuId
+        if ($E3Licenses.ConsumedUnits -ge $E3Licenses.ActiveUnits) {
+            Throw "There are not any E3 licenses available to assign to this user."
+        }
+    } else {
+        $E1Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*STANDARDPACK"}
+        [string]$License = $E1Licenses | Select -ExpandProperty AccountSkuId
+        if ($E1Licenses.ConsumedUnits -ge $E1Licenses.ActiveUnits) {
+            Throw "There are not any E1 licenses available to assign to this user."
+        }
+    }
 
     Set-MsolUser -UserPrincipalName $UserPrincipalName -UsageLocation 'US'
     Set-MsolUserLicense -UserPrincipalName $UserPrincipalName -AddLicenses $License
@@ -706,7 +735,10 @@ function Move-MailboxToOffice365 {
     Set-O365Clutter -Identity $UserPrincipalName -Enable $false
     Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 
-    if ($EnableArchive -eq $True) {
+    if (($EnableArchive -eq $True) -and ($UserHasTheirOwnDedicatedComputer -eq $False)) {
+        Throw "In-place archive can only be enabled on mailboxes with an E3 license."
+    }
+    if (($EnableArchive -eq $True) -and ($UserHasTheirOwnDedicatedComputer)) {
         Enable-remoteMailbox $UserPrincipalName -Archive
     }
 }
