@@ -550,7 +550,7 @@ function New-TervisWindowsUser{
         $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
         $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
 
-        $Office365Credential = Import-Clixml $env:USERPROFILE\Office365EmailCredential.txt
+        $Office365Credential = Get-ExchangeOnlineCredential
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
 
         if ($MiddleInitial) {
