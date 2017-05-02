@@ -1,4 +1,6 @@
-﻿Add-PSSnapin Microsoft.Exchange.Management.PowerShell.E2010
+﻿$UserCredential = Get-Credential
+$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://exchange2016.tervis.prv/PowerShell/ -Authentication Kerberos -Credential $UserCredential
+Import-PSSession $Session
 
 function Install-TervisTechnicalServicesWindowsServer {
     param(
@@ -511,7 +513,7 @@ function New-TervisWindowsUser{
     param(
         [parameter(mandatory)]$FirstName,
         [parameter(mandatory)]$LastName,
-        [parameter()]$MiddleInitial,
+        $MiddleInitial,
         [parameter(mandatory)]$ManagerUserName,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
@@ -552,7 +554,7 @@ function New-TervisWindowsUser{
 
         $Office365Credential = Get-ExchangeOnlineCredential
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-
+         
         if ($MiddleInitial) {
             New-ADUser `
                 -SamAccountName $Username `
@@ -570,7 +572,7 @@ function New-TervisWindowsUser{
                 -Description $Title `
                 -Title $Title `
                 -Manager $ManagerDN `
-                -Enabled
+                -Enabled $true
         } else {
             New-ADUser `
                 -SamAccountName $Username `
@@ -587,7 +589,7 @@ function New-TervisWindowsUser{
                 -Description $Title `
                 -Title $Title `
                 -Manager $ManagerDN `
-                -Enabled
+                -Enabled $true
         }
 
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
