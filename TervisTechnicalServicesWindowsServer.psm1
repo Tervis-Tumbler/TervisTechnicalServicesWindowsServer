@@ -657,7 +657,7 @@ function New-TervisWindowsUser{
             Import-PSSession $Session -Prefix 'O365' -DisableNameChecking -AllowClobber
         }
 
-        [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Select -ExpandProperty SmartHosts | Select -First 1
+        [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Select -First 1 | Select -ExpandProperty SmartHosts
         New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
         Write-Verbose "Migrating the mailbox"
@@ -728,7 +728,7 @@ function Move-MailboxToOffice365 {
         Import-PSSession $Session -Prefix 'O365' -DisableNameChecking -AllowClobber
     }
 
-    [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Select -ExpandProperty SmartHosts | Select -First 1
+    [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Select -First 1 | Select -ExpandProperty SmartHosts
     New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
     Write-Verbose "Migrating the mailbox"
