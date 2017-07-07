@@ -640,6 +640,7 @@ function New-TervisWindowsUser{
 
         Set-MsolUser -UserPrincipalName $UserPrincipalName -UsageLocation 'US'
         Set-MsolUserLicense -UserPrincipalName $UserPrincipalName -AddLicenses $License
+        Start-Sleep 300
 
         Write-Verbose "Connect to Exchange Online"
         $Sessions = Get-PsSession
