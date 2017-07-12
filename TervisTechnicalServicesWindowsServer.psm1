@@ -1,5 +1,5 @@
-﻿$UserCredential = Get-Credential
-$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://exchange2016.tervis.prv/PowerShell/ -Authentication Kerberos -Credential $UserCredential
+﻿$OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://exchange2016.tervis.prv/PowerShell/ -Authentication Kerberos -Credential $OnPremiseCredential
 Import-PSSession $Session
 
 function Install-TervisTechnicalServicesWindowsServer {
