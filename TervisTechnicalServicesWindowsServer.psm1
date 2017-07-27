@@ -753,3 +753,40 @@ function Move-MailboxToOffice365 {
         Enable-remoteMailbox $UserPrincipalName -Archive
     }
 }
+
+function Update-TervisSNMPConfiguration {
+    param (
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$ComputerName
+    )
+    Begin {
+        $ConfigurationDetails = Get-PasswordstateEntryDetails -PasswordID 12
+        $CommunityString = $ConfigurationDetails | Select -ExpandProperty Password
+        $SNMPTrap = $ConfigurationDetails | Select -ExpandProperty URL
+    }
+    Process {
+        Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+            If ((Get-WindowsFeature -Name SNMP-Service).Installed -ne "True") {
+                Add-WindowsFeature SNMP-Service
+            }
+            If ((Get-WindowsFeature -Name SNMP-WMI-Provider).Installed -ne "True") {
+                Add-WindowsFeature SNMP-WMI-Provider
+            }
+            if (-NOT (Test-Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\PermittedManagers\")) {
+                New-Item -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\PermittedManagers\" -Force | Out-Null
+            }
+            if (-NOT (Test-Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\ValidCommunities\")) {
+                New-Item -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\ValidCommunities\" -Force | Out-Null
+            }
+            if (-NOT ((Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\PermittedManagers\" -Name "1").1) -eq "Localhost") {
+                New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\PermittedManagers\" -Name "1" -Value "localhost" -PropertyType STRING -Force | Out-Null
+            }
+            if (-NOT ((Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\PermittedManagers\" -Name "2").2) -eq $Using:SNMPTrap) {
+                New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\PermittedManagers\" -Name "2" -Value $Using:SNMPTrap -PropertyType STRING -Force | Out-Null
+            }
+            if (-NOT ((Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\ValidCommunities\" -Name $Using:CommunityString).$Using:CommunityString) -eq $Using:CommunityString) {
+                New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\services\SNMP\Parameters\ValidCommunities\" -Name $Using:CommunityString -Value "4" -PropertyType DWORD -Force | Out-Null
+            }
+            Restart-Service SNMP
+        }
+    }
+}
