@@ -26,7 +26,7 @@ function New-TervisDistributionGroup {
     )
     Connect-ToTervisExchange
     New-DistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
-    Invoke-ADAzureSync -Server $AzureADConnectComputerName
+    Invoke-ADAzureSync
 }
 
 function _GetDefault {
@@ -536,6 +536,7 @@ function New-TervisWindowsUser{
         [parameter(mandatory)]$AzureADConnectComputerName,
         [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
+    $AzureADConnectComputerName = Get-AzureADConnectComputerName
     Connect-ToTervisExchange
 
     [string]$FirstInitialLastName = $FirstName[0] + $LastName
