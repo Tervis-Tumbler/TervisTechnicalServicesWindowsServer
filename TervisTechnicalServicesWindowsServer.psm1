@@ -1,6 +1,10 @@
-﻿$OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://exchange2016.tervis.prv/PowerShell/ -Authentication Kerberos -Credential $OnPremiseCredential
-Import-PSSession $Session
+﻿function Connect-ToTervisExchange {
+    if (-NOT (Get-PSSession | Where {$_.ComputerName -eq "exchange2016.tervis.prv" -and $_.State -eq "Opened"})) {
+        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+        $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://exchange2016.tervis.prv/PowerShell/ -Authentication Kerberos -Credential $OnPremiseCredential
+        Import-PSSession $Session
+    }
+}
 
 function Install-TervisTechnicalServicesWindowsServer {
     param(
@@ -12,6 +16,17 @@ function Install-TervisTechnicalServicesWindowsServer {
     $InternalCredential | Export-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
     Initialize-PasswordStateRepository -ApiEndpoint 'https://passwordstate/api' -CredentialRepository 'C:\PasswordStateCreds'
     Export-PasswordStateApiKey -ApiKey $PasswordStateCredential
+}
+
+function New-TervisDistributionGroup {
+    param (
+        [parameter(mandatory)]$DistributionGroupName,
+        $Members,
+        [parameter(mandatory)]$AzureADConnectComputerName
+    )
+    Connect-ToTervisExchange
+    New-DistributionGroup -Name $DistributionGroupName -Members $Members
+    Invoke-ADAzureSync -Server $AzureADConnectComputerName
 }
 
 function _GetDefault {
@@ -521,6 +536,7 @@ function New-TervisWindowsUser{
         [parameter(mandatory)]$AzureADConnectComputerName,
         [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
+    Connect-ToTervisExchange
 
     [string]$FirstInitialLastName = $FirstName[0] + $LastName
     [string]$FirstNameLastInitial = $FirstName + $LastName[0]
@@ -693,6 +709,7 @@ function Move-MailboxToOffice365 {
     $Office365Credential = Import-Clixml $env:USERPROFILE\Office365EmailCredential.txt
     $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
 
+    Connect-ToTervisExchange
     Connect-MsolService -Credential $Office365Credential
 
     [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
