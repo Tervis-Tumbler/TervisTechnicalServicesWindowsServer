@@ -25,7 +25,7 @@ function New-TervisDistributionGroup {
         [parameter(mandatory)]$AzureADConnectComputerName
     )
     Connect-ToTervisExchange
-    New-DistributionGroup -Name $DistributionGroupName -Members $Members
+    New-DistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
     Invoke-ADAzureSync -Server $AzureADConnectComputerName
 }
 
