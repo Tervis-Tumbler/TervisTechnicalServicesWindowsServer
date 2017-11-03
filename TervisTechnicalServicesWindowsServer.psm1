@@ -524,41 +524,24 @@ function Get-TempPassword {
     }
 }
 
-function New-TervisWindowsUser{
+function New-TervisWindowsUser {
     param(
         [parameter(mandatory)]$FirstName,
         [parameter(mandatory)]$LastName,
-        $MiddleInitial,
         [parameter(mandatory)]$ManagerUserName,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
         [parameter(mandatory)]$SourceUserName,
-        [parameter(mandatory)]$AzureADConnectComputerName,
         [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
     $AzureADConnectComputerName = Get-AzureADConnectComputerName
     Connect-ToTervisExchange
 
-    [string]$FirstInitialLastName = $FirstName[0] + $LastName
-    [string]$FirstNameLastInitial = $FirstName + $LastName[0]
+    $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName
 
-    If (!(Get-ADUser -filter {sAMAccountName -eq $FirstInitialLastName})) {
-        [string]$UserName = $FirstInitialLastName.substring(0).tolower()
-        Write-Host "UserName is $UserName" -ForegroundColor Green
-    } elseif (!(Get-ADUser -filter {sAMAccountName -eq $FirstNameLastInitial})) {
-        [string]$UserName = $FirstNameLastInitial
-        Write-Host 'First initial + last name is in use.' -ForegroundColor Red
-        Write-Host "UserName is $UserName" -ForegroundColor Green
-    } else {
-        Write-Host 'First initial + last name is in use.' -ForegroundColor Red
-        Write-Host 'First name + last initial is in use.' -ForegroundColor Red
-        Write-Host 'You will need to manually define $UserName' -ForegroundColor Red
-        $UserName = $null
-    }
+    if ($UserName) {
 
-    If (!($UserName -eq $null)) {
-
-        [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
+        [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).tolower()
         [string]$Company = $AdDomainNetBiosName.substring(0,1).toupper()+$AdDomainNetBiosName.substring(1).tolower()
         [string]$DisplayName = $FirstName + ' ' + $LastName
         [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
@@ -585,7 +568,6 @@ function New-TervisWindowsUser{
                 -Path $Path `
                 -Company $Company `
                 -Department $Department `
-                -Office $Department `
                 -Description $Title `
                 -Title $Title `
                 -Manager $ManagerDN `
@@ -602,7 +584,6 @@ function New-TervisWindowsUser{
                 -Path $Path `
                 -Company $Company `
                 -Department $Department `
-                -Office $Department `
                 -Description $Title `
                 -Title $Title `
                 -Manager $ManagerDN `
