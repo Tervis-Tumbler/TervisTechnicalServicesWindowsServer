@@ -526,7 +526,7 @@ function New-TervisWindowsUser {
         [parameter(mandatory)]$SourceUserName,
         [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
-    $AzureADConnectComputerName = Get-AzureADConnectComputerName    
+    $AzureADConnectComputerName = Get-AzureADConnectComputerName
 
     $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName
 
@@ -660,32 +660,14 @@ function New-TervisProductionUser{
     param(
         [parameter(mandatory)]$FirstName,
         [parameter(mandatory)]$LastName,
-        $MiddleInitial,
-        [parameter(mandatory)]$AzureADConnectComputerName,
         [switch]$MultipleUsers = $false
     )
-
+    $AzureADConnectComputerName = Get-AzureADConnectComputerName
     $SourceUserName = "sourceusertemplate"
 
-    [string]$FirstInitialLastName = $FirstName[0] + $LastName
-    [string]$FirstNameLastInitial = $FirstName + $LastName[0]
+    $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName
 
-    If (!(Get-ADUser -filter {sAMAccountName -eq $FirstInitialLastName})) {
-        [string]$UserName = $FirstInitialLastName.substring(0).tolower()
-        Write-Host "UserName is $UserName" -ForegroundColor Green
-    } elseif (!(Get-ADUser -filter {sAMAccountName -eq $FirstNameLastInitial})) {
-        [string]$UserName = $FirstNameLastInitial
-        Write-Host 'First initial + last name is in use.' -ForegroundColor Red
-        Write-Host "UserName is $UserName" -ForegroundColor Green
-    } else {
-        Write-Host 'First initial + last name is in use.' -ForegroundColor Red
-        Write-Host 'First name + last initial is in use.' -ForegroundColor Red
-        Write-Host 'You will need to manually define $UserName' -ForegroundColor Red
-        $UserName = $null
-    }
-
-    If (!($UserName -eq $null)) {
-
+    If ($UserName) {
         [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
         [string]$Company = $AdDomainNetBiosName.substring(0,1).toupper()+$AdDomainNetBiosName.substring(1).tolower()
         [string]$DisplayName = $FirstName + ' ' + $LastName
@@ -699,40 +681,22 @@ function New-TervisProductionUser{
         $Office365Credential = Get-ExchangeOnlineCredential
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
          
-        if ($MiddleInitial) {
-            New-ADUser `
-                -SamAccountName $Username `
-                -Name $DisplayName `
-                -GivenName $FirstName `
-                -Surname $LastName `
-                -Initials $MiddleInitial `
-                -UserPrincipalName $UserPrincipalName `
-                -AccountPassword $SecurePW `
-                -ChangePasswordAtLogon $false `
-                -Path $Path `
-                -Company $Company `
-                -Department "Production" `
-                -Office "Production" `
-                -Description "Production" `
-                -Title "Production" `
-                -Enabled $false
-        } else {
-            New-ADUser `
-                -SamAccountName $Username `
-                -Name $DisplayName `
-                -GivenName $FirstName `
-                -Surname $LastName `
-                -UserPrincipalName $UserPrincipalName `
-                -AccountPassword $SecurePW `
-                -ChangePasswordAtLogon $false `
-                -Path $Path `
-                -Company $Company `
-                -Department "Production" `
-                -Office "Production" `
-                -Description "Production" `
-                -Title "Production" `
-                -Enabled $false `
-        }
+        New-ADUser `
+            -SamAccountName $Username `
+            -Name $DisplayName `
+            -GivenName $FirstName `
+            -Surname $LastName `
+            -UserPrincipalName $UserPrincipalName `
+            -AccountPassword $SecurePW `
+            -ChangePasswordAtLogon $false `
+            -Path $Path `
+            -Company $Company `
+            -Department "Production" `
+            -Office "Production" `
+            -Description "Production" `
+            -Title "Production" `
+            -Enabled $false `
+        
 
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
@@ -784,24 +748,8 @@ function New-TervisContractor {
     }
     
     process {
-        [string]$FirstInitialLastName = $FirstName[0] + $LastName
-        [string]$FirstNameLastInitial = $FirstName + $LastName[0]
-    
-        If (!(Get-ADUser -filter {sAMAccountName -eq $FirstInitialLastName})) {
-            [string]$UserName = $FirstInitialLastName.substring(0).tolower()
-            Write-Host "UserName is $UserName" -ForegroundColor Green
-        } elseif (!(Get-ADUser -filter {sAMAccountName -eq $FirstNameLastInitial})) {
-            [string]$UserName = $FirstNameLastInitial
-            Write-Host 'First initial + last name is in use.' -ForegroundColor Red
-            Write-Host "UserName is $UserName" -ForegroundColor Green
-        } else {
-            Write-Host 'First initial + last name is in use.' -ForegroundColor Red
-            Write-Host 'First name + last initial is in use.' -ForegroundColor Red
-            Write-Host 'You will need to manually define $UserName' -ForegroundColor Red
-            $UserName = $null
-        }
-    
-        If (!($UserName -eq $null)) {
+        $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName        
+        if ($UserName) {
     
             [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
             [string]$DisplayName = $FirstName + ' ' + $LastName
@@ -816,54 +764,29 @@ function New-TervisContractor {
             $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
             $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
     
-            
-            if ($MiddleInitial) {
-               New-ADUser `
-                    -SamAccountName $Username `
-                    -Name $DisplayName `
-                    -GivenName $FirstName `
-                    -Surname $LastName `
-                    -Initials $MiddleInitial `
-                    -UserPrincipalName $UserPrincipalName `
-                    -AccountPassword $SecurePW `
-                    -ChangePasswordAtLogon $true `
-                    -Path $Path `
-                    -Description $Description `
-                    -Company $Company `
-                    -Department $Department `
-                    -Office $Department `
-                    -Description $Description `
-                    -Title $Title `
-                    -Manager $ManagerDN `
-                    -Enabled $true
-            } else {
-                New-ADUser `
-                    -SamAccountName $Username `
-                    -Name $DisplayName `
-                    -GivenName $FirstName `
-                    -Surname $LastName `
-                    -UserPrincipalName $UserPrincipalName `
-                    -AccountPassword $SecurePW `
-                    -ChangePasswordAtLogon $true `
-                    -Path $Path `
-                    -Company $Company `
-                    -Department $Department `
-                    -Office $Department `
-                    -Description $Description `
-                    -Title $Title `
-                    -Manager $ManagerDN `
-                    -Enabled $true
-            }
+            New-ADUser `
+                -SamAccountName $Username `
+                -Name $DisplayName `
+                -GivenName $FirstName `
+                -Surname $LastName `
+                -UserPrincipalName $UserPrincipalName `
+                -AccountPassword $SecurePW `
+                -ChangePasswordAtLogon $true `
+                -Path $Path `
+                -Company $Company `
+                -Department $Department `
+                -Description $Description `
+                -Title $Title `
+                -Manager $ManagerDN `
+                -Enabled $true
+
             Add-ADGroupMember $CompanySecurityGroup -Members $UserName
             Add-ADGroupMember "CiscoVPN" -Members $UserName
             New-MailContact -FirstName $FirstName -LastName $LastName -Name $DisplayName -ExternalEmailAddress $EmailAddress 
             
             $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
             New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
-    
-            Write-Verbose "Forcing a sync between domain controllers"
-            $DC = Get-ADDomainController | Select -ExpandProperty HostName
-            Invoke-Command -ComputerName $DC -ScriptBlock {repadmin /syncall}
+
             Send-TervisContractorWelcomeLetter -Name $DisplayName -EmailAddress $EmailAddress
         }
     }
