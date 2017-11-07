@@ -570,11 +570,7 @@ function New-TervisWindowsUser {
 
         Copy-ADUserGroupMembership -Identity $SourceUserName -DestinationIdentity $UserName
         
-        Sync-ADDomainControllers
-
-        Write-Verbose 'Starting Sync From AD to Office 365 & Azure AD'
-        Invoke-Command -ComputerName $AzureADConnectComputerName -ScriptBlock {Start-ADSyncSyncCycle -PolicyType Delta}
-        Start-Sleep 30
+        Invoke-ADAzureSync
 
         $Office365Credential = Get-ExchangeOnlineCredential
         Connect-MsolService -Credential $Office365Credential
