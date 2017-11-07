@@ -566,13 +566,7 @@ function New-TervisWindowsUser {
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
-        Import-TervisExchangePSSession
-        [string]$MailboxDatabase = Get-ExchangeMailboxDatabase | 
-        Where Name -NotLike "Temp*" | 
-        Select -Index 0 | 
-        Select -ExpandProperty Name
-
-        Enable-ExchangeMailbox -Identity $UserPrincipalName -Database $MailboxDatabase
+        Enable-TervisExchangeMailbox -Identity $UserPrincipalName
 
         $Groups = Get-ADUser $SourceUserName -Properties MemberOf | Select -ExpandProperty MemberOf
 
@@ -656,7 +650,7 @@ function New-TervisWindowsUser {
     }
 }
 
-function New-TervisProductionUser{
+function New-TervisProductionUser {
     param(
         [parameter(mandatory)]$FirstName,
         [parameter(mandatory)]$LastName,
@@ -709,11 +703,8 @@ function New-TervisProductionUser{
         
         Set-ADUser -CannotChangePassword $true -PasswordNeverExpires $true -Identity $UserName
 
-        If (!($MultipleUsers)){
-        Write-Verbose "Forcing a sync between domain controllers"
-        $DC = Get-ADDomainController | select -ExpandProperty HostName
-        Invoke-Command -ComputerName $DC -ScriptBlock {repadmin /syncall}
-        Start-Sleep 30
+        If (!($MultipleUsers)) {
+            Sync-ADDomainControllers
         }
     }
 }
