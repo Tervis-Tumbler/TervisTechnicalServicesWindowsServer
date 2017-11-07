@@ -1,12 +1,4 @@
-﻿function Connect-ToTervisExchange {
-    if (-NOT (Get-PSSession | Where {$_.ComputerName -eq "exchange2016.tervis.prv" -and $_.State -eq "Opened"})) {
-        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-        $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://exchange2016.tervis.prv/PowerShell/ -Authentication Kerberos -Credential $OnPremiseCredential
-        Import-PSSession $Session
-    }
-}
-
-function Install-TervisTechnicalServicesWindowsServer {
+﻿function Install-TervisTechnicalServicesWindowsServer {
     param(
         [System.Management.Automation.PSCredential]$Office365Credential = $(get-credential -message "Please supply the credentials to access ExchangeOnline. Username must be in the form UserName@Domain.com"),
         [System.Management.Automation.PSCredential]$InternalCredential = $(get-credential -message "Please supply the credentials to access internal resources. Username must be in the form DOMAIN\username"),
@@ -24,8 +16,8 @@ function New-TervisDistributionGroup {
         $Members,
         [parameter(mandatory)]$AzureADConnectComputerName
     )
-    Connect-ToTervisExchange
-    New-DistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
+    Import-TervisExchangePSSession
+    New-ExchangeDistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
     Invoke-ADAzureSync
 }
 
@@ -534,8 +526,7 @@ function New-TervisWindowsUser {
         [parameter(mandatory)]$SourceUserName,
         [switch]$UserHasTheirOwnDedicatedComputer = $False
     )
-    $AzureADConnectComputerName = Get-AzureADConnectComputerName
-    Connect-ToTervisExchange
+    $AzureADConnectComputerName = Get-AzureADConnectComputerName    
 
     $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName
 
@@ -546,59 +537,42 @@ function New-TervisWindowsUser {
         [string]$DisplayName = $FirstName + ' ' + $LastName
         [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
         [string]$LogonName = $AdDomainNetBiosName + '\' + $username
-        [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | Select -ExpandProperty ParentContainer
+        [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | 
+        select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | 
+        Select -ExpandProperty ParentContainer
+
         $ManagerDN = Get-ADUser $ManagerUserName | Select -ExpandProperty DistinguishedName
 
-        $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
-        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
-
-        $Office365Credential = Get-ExchangeOnlineCredential
-        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+        $PW = Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
+        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force    
          
-        if ($MiddleInitial) {
-            New-ADUser `
-                -SamAccountName $Username `
-                -Name $DisplayName `
-                -GivenName $FirstName `
-                -Surname $LastName `
-                -Initials $MiddleInitial `
-                -UserPrincipalName $UserPrincipalName `
-                -AccountPassword $SecurePW `
-                -ChangePasswordAtLogon $true `
-                -Path $Path `
-                -Company $Company `
-                -Department $Department `
-                -Description $Title `
-                -Title $Title `
-                -Manager $ManagerDN `
-                -Enabled $true
-        } else {
-            New-ADUser `
-                -SamAccountName $Username `
-                -Name $DisplayName `
-                -GivenName $FirstName `
-                -Surname $LastName `
-                -UserPrincipalName $UserPrincipalName `
-                -AccountPassword $SecurePW `
-                -ChangePasswordAtLogon $true `
-                -Path $Path `
-                -Company $Company `
-                -Department $Department `
-                -Description $Title `
-                -Title $Title `
-                -Manager $ManagerDN `
-                -Enabled $true
-        }
+        $ADUser = New-ADUser `
+            -SamAccountName $Username `
+            -Name $DisplayName `
+            -GivenName $FirstName `
+            -Surname $LastName `
+            -UserPrincipalName $UserPrincipalName `
+            -AccountPassword $SecurePW `
+            -ChangePasswordAtLogon $true `
+            -Path $Path `
+            -Company $Company `
+            -Department $Department `
+            -Title $Title `
+            -Manager $ManagerDN `
+            -Enabled $true
+        
+        $ADUser | Sync-TervisADObjectToAllDomainControllers
 
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
-        Write-Verbose "Forcing a sync between domain controllers"
-        $DC = Get-ADDomainController | Select -ExpandProperty HostName
-        Invoke-Command -ComputerName $DC -ScriptBlock {repadmin /syncall}
-        Start-Sleep 30
-        [string]$MailboxDatabase = Get-MailboxDatabase | Where Name -NotLike "Temp*" | Select -Index 0 | Select -ExpandProperty Name
-        Enable-Mailbox -Identity $UserPrincipalName -Database $MailboxDatabase
+        Import-TervisExchangePSSession
+        [string]$MailboxDatabase = Get-ExchangeMailboxDatabase | 
+        Where Name -NotLike "Temp*" | 
+        Select -Index 0 | 
+        Select -ExpandProperty Name
+
+        Enable-ExchangeMailbox -Identity $UserPrincipalName -Database $MailboxDatabase
 
         $Groups = Get-ADUser $SourceUserName -Properties MemberOf | Select -ExpandProperty MemberOf
 
@@ -615,6 +589,7 @@ function New-TervisWindowsUser {
         Invoke-Command -ComputerName $AzureADConnectComputerName -ScriptBlock {Start-ADSyncSyncCycle -PolicyType Delta}
         Start-Sleep 30
 
+        $Office365Credential = Get-ExchangeOnlineCredential
         Connect-MsolService -Credential $Office365Credential
 
         While (!(Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
@@ -657,6 +632,8 @@ function New-TervisWindowsUser {
         }
 
         [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
+
+        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
         New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
         Write-Verbose "Migrating the mailbox"
@@ -676,6 +653,219 @@ function New-TervisWindowsUser {
         }
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
         Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
+    }
+}
+
+function New-TervisProductionUser{
+    param(
+        [parameter(mandatory)]$FirstName,
+        [parameter(mandatory)]$LastName,
+        $MiddleInitial,
+        [parameter(mandatory)]$AzureADConnectComputerName,
+        [switch]$MultipleUsers = $false
+    )
+
+    $SourceUserName = "sourceusertemplate"
+
+    [string]$FirstInitialLastName = $FirstName[0] + $LastName
+    [string]$FirstNameLastInitial = $FirstName + $LastName[0]
+
+    If (!(Get-ADUser -filter {sAMAccountName -eq $FirstInitialLastName})) {
+        [string]$UserName = $FirstInitialLastName.substring(0).tolower()
+        Write-Host "UserName is $UserName" -ForegroundColor Green
+    } elseif (!(Get-ADUser -filter {sAMAccountName -eq $FirstNameLastInitial})) {
+        [string]$UserName = $FirstNameLastInitial
+        Write-Host 'First initial + last name is in use.' -ForegroundColor Red
+        Write-Host "UserName is $UserName" -ForegroundColor Green
+    } else {
+        Write-Host 'First initial + last name is in use.' -ForegroundColor Red
+        Write-Host 'First name + last initial is in use.' -ForegroundColor Red
+        Write-Host 'You will need to manually define $UserName' -ForegroundColor Red
+        $UserName = $null
+    }
+
+    If (!($UserName -eq $null)) {
+
+        [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
+        [string]$Company = $AdDomainNetBiosName.substring(0,1).toupper()+$AdDomainNetBiosName.substring(1).tolower()
+        [string]$DisplayName = $FirstName + ' ' + $LastName
+        [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
+        [string]$LogonName = $AdDomainNetBiosName + '\' + $username
+        [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | Select -ExpandProperty ParentContainer
+
+        $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
+        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
+
+        $Office365Credential = Get-ExchangeOnlineCredential
+        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+         
+        if ($MiddleInitial) {
+            New-ADUser `
+                -SamAccountName $Username `
+                -Name $DisplayName `
+                -GivenName $FirstName `
+                -Surname $LastName `
+                -Initials $MiddleInitial `
+                -UserPrincipalName $UserPrincipalName `
+                -AccountPassword $SecurePW `
+                -ChangePasswordAtLogon $false `
+                -Path $Path `
+                -Company $Company `
+                -Department "Production" `
+                -Office "Production" `
+                -Description "Production" `
+                -Title "Production" `
+                -Enabled $false
+        } else {
+            New-ADUser `
+                -SamAccountName $Username `
+                -Name $DisplayName `
+                -GivenName $FirstName `
+                -Surname $LastName `
+                -UserPrincipalName $UserPrincipalName `
+                -AccountPassword $SecurePW `
+                -ChangePasswordAtLogon $false `
+                -Path $Path `
+                -Company $Company `
+                -Department "Production" `
+                -Office "Production" `
+                -Description "Production" `
+                -Title "Production" `
+                -Enabled $false `
+        }
+
+        $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
+        New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
+
+        $Groups = Get-ADUser $SourceUserName -Properties MemberOf | Select -ExpandProperty MemberOf
+
+        Foreach ($Group in $Groups) {
+            Add-ADGroupMember -Identity $group -Members $UserName
+        }
+        
+        Set-ADUser -CannotChangePassword $true -PasswordNeverExpires $true -Identity $UserName
+
+        If (!($MultipleUsers)){
+        Write-Verbose "Forcing a sync between domain controllers"
+        $DC = Get-ADDomainController | select -ExpandProperty HostName
+        Invoke-Command -ComputerName $DC -ScriptBlock {repadmin /syncall}
+        Start-Sleep 30
+        }
+    }
+}
+
+function New-TervisContractor {
+    [CmdletBinding()]
+    Param(
+        [parameter(mandatory)]$FirstName,
+        [parameter(mandatory)]$LastName,
+        [parameter(Mandatory)]$EmailAddress,
+        [parameter(mandatory)]$ManagerUserName,
+        [parameter(mandatory)]$Title,
+        [parameter(Mandatory)]$Description
+    )
+    DynamicParam {
+            $ParameterName = 'Company'
+            $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+            $AttributeCollection = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
+            $ParameterAttribute = New-Object System.Management.Automation.ParameterAttribute
+            $ParameterAttribute.Mandatory = $true
+            $ParameterAttribute.Position = 4
+            $AttributeCollection.Add($ParameterAttribute)
+            $arrSet = Get-TervisContractorDefinition -All | select Name -ExpandProperty Name
+            $ValidateSetAttribute = New-Object System.Management.Automation.ValidateSetAttribute($arrSet)
+            $AttributeCollection.Add($ValidateSetAttribute)
+            $RuntimeParameter = New-Object System.Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
+            $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
+            return $RuntimeParameterDictionary
+    }
+    begin {
+        $Company = $PsBoundParameters[$ParameterName]
+    }
+    
+    process {
+        [string]$FirstInitialLastName = $FirstName[0] + $LastName
+        [string]$FirstNameLastInitial = $FirstName + $LastName[0]
+    
+        If (!(Get-ADUser -filter {sAMAccountName -eq $FirstInitialLastName})) {
+            [string]$UserName = $FirstInitialLastName.substring(0).tolower()
+            Write-Host "UserName is $UserName" -ForegroundColor Green
+        } elseif (!(Get-ADUser -filter {sAMAccountName -eq $FirstNameLastInitial})) {
+            [string]$UserName = $FirstNameLastInitial
+            Write-Host 'First initial + last name is in use.' -ForegroundColor Red
+            Write-Host "UserName is $UserName" -ForegroundColor Green
+        } else {
+            Write-Host 'First initial + last name is in use.' -ForegroundColor Red
+            Write-Host 'First name + last initial is in use.' -ForegroundColor Red
+            Write-Host 'You will need to manually define $UserName' -ForegroundColor Red
+            $UserName = $null
+        }
+    
+        If (!($UserName -eq $null)) {
+    
+            [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
+            [string]$DisplayName = $FirstName + ' ' + $LastName
+            [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
+            [string]$LogonName = $AdDomainNetBiosName + '\' + $username
+            [string]$Path = Get-ADUser $ManagerUserName | select distinguishedname -ExpandProperty distinguishedname | Get-ADObjectParentContainer
+            $ManagerDN = Get-ADUser $ManagerUserName | Select -ExpandProperty DistinguishedName
+            if ((Get-ADGroup -Filter {SamAccountName -eq $Company}) -eq $null ){
+                New-ADGroup -Name $Company -GroupScope Universal -GroupCategory Security
+            }
+            $CompanySecurityGroup = Get-ADGroup -Identity $Company
+            $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
+            $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
+    
+            
+            if ($MiddleInitial) {
+               New-ADUser `
+                    -SamAccountName $Username `
+                    -Name $DisplayName `
+                    -GivenName $FirstName `
+                    -Surname $LastName `
+                    -Initials $MiddleInitial `
+                    -UserPrincipalName $UserPrincipalName `
+                    -AccountPassword $SecurePW `
+                    -ChangePasswordAtLogon $true `
+                    -Path $Path `
+                    -Description $Description `
+                    -Company $Company `
+                    -Department $Department `
+                    -Office $Department `
+                    -Description $Description `
+                    -Title $Title `
+                    -Manager $ManagerDN `
+                    -Enabled $true
+            } else {
+                New-ADUser `
+                    -SamAccountName $Username `
+                    -Name $DisplayName `
+                    -GivenName $FirstName `
+                    -Surname $LastName `
+                    -UserPrincipalName $UserPrincipalName `
+                    -AccountPassword $SecurePW `
+                    -ChangePasswordAtLogon $true `
+                    -Path $Path `
+                    -Company $Company `
+                    -Department $Department `
+                    -Office $Department `
+                    -Description $Description `
+                    -Title $Title `
+                    -Manager $ManagerDN `
+                    -Enabled $true
+            }
+            Add-ADGroupMember $CompanySecurityGroup -Members $UserName
+            Add-ADGroupMember "CiscoVPN" -Members $UserName
+            New-MailContact -FirstName $FirstName -LastName $LastName -Name $DisplayName -ExternalEmailAddress $EmailAddress 
+            
+            $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
+            New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
+    
+            Write-Verbose "Forcing a sync between domain controllers"
+            $DC = Get-ADDomainController | Select -ExpandProperty HostName
+            Invoke-Command -ComputerName $DC -ScriptBlock {repadmin /syncall}
+            Send-TervisContractorWelcomeLetter -Name $DisplayName -EmailAddress $EmailAddress
+        }
     }
 }
 
