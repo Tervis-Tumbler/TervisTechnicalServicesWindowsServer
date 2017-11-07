@@ -566,13 +566,9 @@ function New-TervisWindowsUser {
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
-        Enable-TervisExchangeMailbox -Identity $UserPrincipalName
+        $ADUser | Enable-TervisExchangeMailbox
 
-        $Groups = Get-ADUser $SourceUserName -Properties MemberOf | Select -ExpandProperty MemberOf
-
-        Foreach ($Group in $Groups) {
-            Add-ADGroupMember -Identity $group -Members $UserName
-        }
+        Copy-ADUserGroupMembership -Identity $SourceUserName -DestinationIdentity $UserName
         
         Write-Verbose "Forcing a sync between domain controllers"
         $DC = Get-ADDomainController | select -ExpandProperty HostName
@@ -670,10 +666,7 @@ function New-TervisProductionUser {
         [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | Select -ExpandProperty ParentContainer
 
         $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
-        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
-
-        $Office365Credential = Get-ExchangeOnlineCredential
-        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force       
          
         New-ADUser `
             -SamAccountName $Username `
@@ -686,20 +679,12 @@ function New-TervisProductionUser {
             -Path $Path `
             -Company $Company `
             -Department "Production" `
-            -Office "Production" `
-            -Description "Production" `
-            -Title "Production" `
-            -Enabled $false `
-        
+            -Enabled $false        
 
         $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
         New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
-        $Groups = Get-ADUser $SourceUserName -Properties MemberOf | Select -ExpandProperty MemberOf
-
-        Foreach ($Group in $Groups) {
-            Add-ADGroupMember -Identity $group -Members $UserName
-        }
+        Copy-ADUserGroupMembership -Identity $SourceUserName -DestinationIdentity $UserName
         
         Set-ADUser -CannotChangePassword $true -PasswordNeverExpires $true -Identity $UserName
 
