@@ -538,8 +538,9 @@ function New-TervisWindowsUser {
         Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
         ManagerDN = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
     }
-
-    if (-not (Get-ADUser -Identity $SAMAccountName)) {
+    
+    $ADUser = try {Get-ADUser -Identity $SAMAccountName} catch {}
+    if (-not $ADUser){
         New-ADUser `
             -SamAccountName $SAMAccountName `
             -Name $DisplayName `
@@ -553,9 +554,10 @@ function New-TervisWindowsUser {
             -Title $Title `
             -Enabled $true `
             @ADUserParameters
-    }
         
-    $ADUser = Get-ADUser -Identity $SAMAccountName
+        $ADUser = Get-ADUser -Identity $SAMAccountName
+    }        
+    
     $ADUser | Sync-TervisADObjectToAllDomainControllers
     $ADUser | Enable-TervisExchangeMailbox
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
