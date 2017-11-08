@@ -600,7 +600,7 @@ function New-TervisWindowsUser {
         }
             
         if ($UserHasTheirOwnDedicatedComputer) {
-            Enable-remoteMailbox $UserPrincipalName -Archive
+            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
         }
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
         Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
