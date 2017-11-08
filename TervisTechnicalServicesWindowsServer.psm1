@@ -518,94 +518,78 @@ function Get-TempPassword {
 
 function New-TervisWindowsUser {
     param(
-        [parameter(mandatory)]$FirstName,
-        [parameter(mandatory)]$LastName,
-        [parameter(mandatory)]$ManagerUserName,
+        [parameter(mandatory)]$GivenName,
+        [parameter(mandatory)]$Surname,
+        [parameter(mandatory)]$SAMAccountName,
+        [parameter(mandatory)]$ManagerSAMAccountName,
         [parameter(mandatory)]$Department,
         [parameter(mandatory)]$Title,
-        [parameter(mandatory)]$SourceUserName,
-        [switch]$UserHasTheirOwnDedicatedComputer = $False
-    )
-    $AzureADConnectComputerName = Get-AzureADConnectComputerName
+        [parameter(mandatory)]$AccountPassword,
+        $Company = "Tervis",
+        [parameter(mandatory)]$SAMAccountNameToBeLike,
+        [switch]$UserHasTheirOwnDedicatedComputer
+    )    
+    $AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).tolower()        
+    $DisplayName = $GivenName + " " + $Surname
+    $UserPrincipalName = $SAMAccountName + '@' + $AdDomainNetBiosName + '.com'            
 
-    $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName
-
-    if ($UserName) {
-
-        [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).tolower()
-        [string]$Company = $AdDomainNetBiosName.substring(0,1).toupper()+$AdDomainNetBiosName.substring(1).tolower()
-        [string]$DisplayName = $FirstName + ' ' + $LastName
-        [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
-        [string]$LogonName = $AdDomainNetBiosName + '\' + $username
-        [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | 
-        select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | 
-        Select -ExpandProperty ParentContainer
-
-        $ManagerDN = Get-ADUser $ManagerUserName | Select -ExpandProperty DistinguishedName
-
-        $PW = Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
-        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force    
-         
-        $ADUser = New-ADUser `
-            -SamAccountName $Username `
-            -Name $DisplayName `
-            -GivenName $FirstName `
-            -Surname $LastName `
-            -UserPrincipalName $UserPrincipalName `
-            -AccountPassword $SecurePW `
-            -ChangePasswordAtLogon $true `
-            -Path $Path `
-            -Company $Company `
-            -Department $Department `
-            -Title $Title `
-            -Manager $ManagerDN `
-            -Enabled $true
-        
-        $ADUser | Sync-TervisADObjectToAllDomainControllers
-
-        $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
-        New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
-
-        $ADUser | Enable-TervisExchangeMailbox
-
-        Copy-ADUserGroupMembership -Identity $SourceUserName -DestinationIdentity $UserName
-        
-        Invoke-ADAzureSync
-
-        Connect-TervisMsolService
-
-        While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
-            Start-Sleep 30
-        }
-        
-        $ADUser | Set-TervisMSOLUserLicense
-        Start-Sleep 300
-
-        Import-TervisMSOnlinePSSession
-        [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-        [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
-        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
-
-        Write-Verbose "Migrating the mailbox"
-        While (!((Get-O365MoveRequest $DisplayName).Status -eq 'Completed')) {
-            Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
-            Start-Sleep 60
-        }
-
-        if ($UserHasTheirOwnDedicatedComputer) {
-            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
-        } else {
-            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
-        }
-            
-        if ($UserHasTheirOwnDedicatedComputer) {
-            Import-TervisExchangePSSession
-            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
-        }
-        Set-O365Clutter -Identity $UserPrincipalName -Enable $false
-        Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
+    $ADUserParameters = @{
+        Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
+        ManagerDN = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
     }
+
+    New-ADUser `
+        -SamAccountName $SAMAccountName `
+        -Name $DisplayName `
+        -GivenName $GivenName `
+        -Surname $Surname `
+        -UserPrincipalName $UserPrincipalName `
+        -AccountPassword $AccountPassword `
+        -ChangePasswordAtLogon $true `
+        -Company $Company `
+        -Department $Department `
+        -Title $Title `
+        -Enabled $true `
+        @ADUserParameters
+        
+    $ADUser = Get-ADUser -Identity $SAMAccountName
+    $ADUser | Sync-TervisADObjectToAllDomainControllers
+    $ADUser | Enable-TervisExchangeMailbox
+    Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
+        
+    Invoke-ADAzureSync
+    Connect-TervisMsolService
+    While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
+        Start-Sleep 30
+    }
+        
+    $License = if ($UserHasTheirOwnDedicatedComputer) { "E3" } else { "E1" }
+    $ADUser | Set-TervisMSOLUserLicense -License $License
+    Start-Sleep 300
+
+    Import-TervisMSOnlinePSSession
+    $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
+    $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
+    $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+    New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+
+    While (-Not ((Get-O365MoveRequest $DisplayName).Status -eq "Complete")) {
+        Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
+        Start-Sleep 60
+    }
+
+    if ($UserHasTheirOwnDedicatedComputer) {
+        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
+    } else {
+        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+    }
+            
+    if ($UserHasTheirOwnDedicatedComputer) {
+        Import-TervisExchangePSSession
+        Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
+    }
+    Set-O365Clutter -Identity $UserPrincipalName -Enable $false
+    Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 }
 
 function New-TervisProductionUser {
