@@ -600,6 +600,7 @@ function New-TervisWindowsUser {
         }
             
         if ($UserHasTheirOwnDedicatedComputer) {
+            Import-TervisExchangePSSession
             Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
         }
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
