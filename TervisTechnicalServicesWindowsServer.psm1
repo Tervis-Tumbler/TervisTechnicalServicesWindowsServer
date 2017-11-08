@@ -18,6 +18,7 @@ function New-TervisDistributionGroup {
     )
     Import-TervisExchangePSSession
     New-ExchangeDistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
+    Sync-ADDomainControllers -Blocking
     Invoke-ADAzureSync
 }
 
@@ -559,7 +560,9 @@ function New-TervisWindowsUser {
     $ADUser | Enable-TervisExchangeMailbox
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
         
-    Invoke-ADAzureSync
+    $ADUser = Get-ADUser -Identity $SAMAccountName
+    $ADUser | Sync-TervisADObjectToAllDomainControllers
+
     Connect-TervisMsolService
     While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
         Start-Sleep 30
