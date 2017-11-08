@@ -536,7 +536,7 @@ function New-TervisWindowsUser {
 
     $ADUserParameters = @{
         Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
-        ManagerDN = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
+        Manager = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
     }
     
     $ADUser = try {Get-ADUser -Identity $SAMAccountName} catch {}
