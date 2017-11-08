@@ -572,50 +572,18 @@ function New-TervisWindowsUser {
         
         Invoke-ADAzureSync
 
-        $Office365Credential = Get-ExchangeOnlineCredential
-        Connect-MsolService -Credential $Office365Credential
+        Connect-TervisMsolService
 
-        While (!(Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
+        While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
             Start-Sleep 30
         }
-
-        [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-        if ($UserHasTheirOwnDedicatedComputer) {
-            $E3Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*ENTERPRISEPACK"}
-            [string]$License = $E3Licenses | Select -ExpandProperty AccountSkuId
-            if ($E3Licenses.ConsumedUnits -ge $E3Licenses.ActiveUnits) {
-                Throw "There are not any E3 licenses available to assign to this user."
-            }
-        } else {
-            $E1Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*STANDARDPACK"}
-            [string]$License = $E1Licenses | Select -ExpandProperty AccountSkuId
-            if ($E1Licenses.ConsumedUnits -ge $E1Licenses.ActiveUnits) {
-                Throw "There are not any E1 licenses available to assign to this user."
-            }
-        }
-
-        Set-MsolUser -UserPrincipalName $UserPrincipalName -UsageLocation 'US'
-        Set-MsolUserLicense -UserPrincipalName $UserPrincipalName -AddLicenses $License
+        
+        $ADUser | Set-TervisMSOLUserLicense
         Start-Sleep 300
 
-        Write-Verbose "Connect to Exchange Online"
-        $Sessions = Get-PsSession
-        $Connected = $false
-        Foreach ($Session in $Sessions) {
-            if ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Opened') {
-                $Connected = $true
-            } elseif ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Broken') {
-                Remove-PSSession $Session
-            }
-        }
-        if ($Connected -eq $false) {
-            Write-Verbose "Connect to Exchange Online"
-            $Session = New-PSSession -ConfigurationName Microsoft.Exchange -Authentication Basic -ConnectionUri https://ps.outlook.com/powershell -AllowRedirection:$true -Credential $Office365Credential
-            Import-PSSession $Session -Prefix 'O365' -DisableNameChecking -AllowClobber
-        }
-
+        Import-TervisMSOnlinePSSession
+        [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
         [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
-
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
         New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
