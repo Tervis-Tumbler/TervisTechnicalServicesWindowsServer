@@ -530,27 +530,29 @@ function New-TervisWindowsUser {
         [switch]$UserHasTheirOwnDedicatedComputer
     )    
     $AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).tolower()        
-    $DisplayName = $GivenName + " " + $Surname
-    $UserPrincipalName = $SAMAccountName + '@' + $AdDomainNetBiosName + '.com'            
+    $DisplayName = "$GivenName $Surname"
+    $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
 
     $ADUserParameters = @{
         Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
         ManagerDN = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
     }
 
-    New-ADUser `
-        -SamAccountName $SAMAccountName `
-        -Name $DisplayName `
-        -GivenName $GivenName `
-        -Surname $Surname `
-        -UserPrincipalName $UserPrincipalName `
-        -AccountPassword $AccountPassword `
-        -ChangePasswordAtLogon $true `
-        -Company $Company `
-        -Department $Department `
-        -Title $Title `
-        -Enabled $true `
-        @ADUserParameters
+    if (-not (Get-ADUser -Identity $SAMAccountName)) {
+        New-ADUser `
+            -SamAccountName $SAMAccountName `
+            -Name $DisplayName `
+            -GivenName $GivenName `
+            -Surname $Surname `
+            -UserPrincipalName $UserPrincipalName `
+            -AccountPassword $AccountPassword `
+            -ChangePasswordAtLogon $true `
+            -Company $Company `
+            -Department $Department `
+            -Title $Title `
+            -Enabled $true `
+            @ADUserParameters
+    }
         
     $ADUser = Get-ADUser -Identity $SAMAccountName
     $ADUser | Sync-TervisADObjectToAllDomainControllers
