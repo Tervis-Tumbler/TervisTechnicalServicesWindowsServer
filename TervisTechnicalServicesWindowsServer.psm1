@@ -565,6 +565,8 @@ function New-TervisWindowsUser {
     $ADUser = Get-ADUser -Identity $SAMAccountName
     $ADUser | Sync-TervisADObjectToAllDomainControllers
 
+    Invoke-ADAzureSync
+
     Connect-TervisMsolService
     While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
         Start-Sleep 30
