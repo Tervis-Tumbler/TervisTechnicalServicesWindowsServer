@@ -564,43 +564,45 @@ function New-TervisWindowsUser {
         $ADUser | Enable-TervisExchangeMailbox
     }
         
-    $ADUser = Get-ADUser -Identity $SAMAccountName
+    $ADUser = Get-TervisADUser -Identity $SAMAccountName
     $ADUser | Sync-TervisADObjectToAllDomainControllers
 
-    Invoke-ADAzureSync
+    if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
+        Invoke-ADAzureSync
 
-    Connect-TervisMsolService
-    While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
-        Start-Sleep 30
-    }
+        Connect-TervisMsolService
+        While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
+            Start-Sleep 30
+        }
         
-    $License = if ($UserHasTheirOwnDedicatedComputer) { "E3" } else { "E1" }
-    $ADUser | Set-TervisMSOLUserLicense -License $License
-    Start-Sleep 300
+        $License = if ($UserHasTheirOwnDedicatedComputer) { "E3" } else { "E1" }
+        $ADUser | Set-TervisMSOLUserLicense -License $License
+        Start-Sleep 300
 
-    Import-TervisMSOnlinePSSession
-    $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-    $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
-    $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-    New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+        Import-TervisMSOnlinePSSession
+        $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
+        $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
+        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
-    While (-Not ((Get-O365MoveRequest $DisplayName).Status -match "Complete")) {
-        Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
-        Start-Sleep 60
-    }
+        While (-Not ((Get-O365MoveRequest $DisplayName).Status -match "Complete")) {
+            Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
+            Start-Sleep 60
+        }
 
-    if ($UserHasTheirOwnDedicatedComputer) {
-        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
-    } else {
-        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
-    }
+        if ($UserHasTheirOwnDedicatedComputer) {
+            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
+        } else {
+            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+        }
             
-    if ($UserHasTheirOwnDedicatedComputer) {
-        Import-TervisExchangePSSession
-        Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
+        if ($UserHasTheirOwnDedicatedComputer) {
+            Import-TervisExchangePSSession
+            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
+        }
+        Set-O365Clutter -Identity $UserPrincipalName -Enable $false
+        Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
     }
-    Set-O365Clutter -Identity $UserPrincipalName -Enable $false
-    Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
 }
 
 function New-TervisProductionUser {
