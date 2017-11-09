@@ -531,7 +531,6 @@ function New-TervisWindowsUser {
         [switch]$UserHasTheirOwnDedicatedComputer
     )    
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
-    $DisplayName = "$GivenName $Surname"
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
 
     $ADUserParameters = @{
@@ -543,7 +542,7 @@ function New-TervisWindowsUser {
     if (-not $ADUser){
         New-ADUser `
             -SamAccountName $SAMAccountName `
-            -Name $DisplayName `
+            -Name "$GivenName $Surname" `
             -GivenName $GivenName `
             -Surname $Surname `
             -UserPrincipalName $UserPrincipalName `
@@ -584,8 +583,8 @@ function New-TervisWindowsUser {
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
         New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
-        While (-Not ((Get-O365MoveRequest $DisplayName).Status -match "Complete")) {
-            Get-O365MoveRequestStatistics $UserPrincipalName | Select StatusDetail,PercentComplete
+        While (-Not ((Get-O365MoveRequest -Identity $UserPrincipalNam).Status -match "Complete")) {
+            Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
             Start-Sleep 60
         }
 
