@@ -539,7 +539,7 @@ function New-TervisWindowsUser {
         Manager = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
     }
     
-    $ADUser = try {Get-ADUser -Identity $SAMAccountName} catch {}
+    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName} catch {}
     if (-not $ADUser){
         New-ADUser `
             -SamAccountName $SAMAccountName `
@@ -555,12 +555,14 @@ function New-TervisWindowsUser {
             -Enabled $true `
             @ADUserParameters
         
-        $ADUser = Get-ADUser -Identity $SAMAccountName
+        $ADUser = Get-TervisADUser -Identity $SAMAccountName
     }        
+    Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
     
     $ADUser | Sync-TervisADObjectToAllDomainControllers
-    $ADUser | Enable-TervisExchangeMailbox
-    Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
+    if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
+        $ADUser | Enable-TervisExchangeMailbox
+    }
         
     $ADUser = Get-ADUser -Identity $SAMAccountName
     $ADUser | Sync-TervisADObjectToAllDomainControllers
