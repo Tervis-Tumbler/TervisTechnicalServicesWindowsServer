@@ -530,13 +530,13 @@ function New-TervisWindowsUser {
         [parameter(mandatory)]$SAMAccountNameToBeLike,
         [switch]$UserHasTheirOwnDedicatedComputer
     )    
-    $AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).tolower()        
+    $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
     $DisplayName = "$GivenName $Surname"
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
 
     $ADUserParameters = @{
         Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
-        Manager = Get-ADUser $ManagerSAMAccountName | Select -ExpandProperty DistinguishedName   
+        Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
     }
     
     $ADUser = try {Get-TervisADUser -Identity $SAMAccountName} catch {}
@@ -559,13 +559,12 @@ function New-TervisWindowsUser {
     }        
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
     
-    $ADUser | Sync-TervisADObjectToAllDomainControllers
+    Sync-ADDomainControllers -Blocking
     if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
         $ADUser | Enable-TervisExchangeMailbox
     }
         
-    $ADUser = Get-TervisADUser -Identity $SAMAccountName
-    $ADUser | Sync-TervisADObjectToAllDomainControllers
+    Sync-ADDomainControllers -Blocking
 
     if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
         Invoke-ADAzureSync
