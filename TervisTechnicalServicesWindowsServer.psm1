@@ -586,7 +586,7 @@ function New-TervisWindowsUser {
         New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
         While (-Not ((Get-O365MoveRequest $DisplayName).Status -match "Complete")) {
-            Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
+            Get-O365MoveRequestStatistics $UserPrincipalName | Select StatusDetail,PercentComplete
             Start-Sleep 60
         }
 
