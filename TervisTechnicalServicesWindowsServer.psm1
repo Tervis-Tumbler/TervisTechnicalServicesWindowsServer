@@ -605,49 +605,33 @@ function New-TervisWindowsUser {
 
 function New-TervisProductionUser {
     param(
-        [parameter(mandatory)]$FirstName,
-        [parameter(mandatory)]$LastName,
-        [switch]$MultipleUsers = $false
+        [parameter(mandatory)]$GivenName,
+        [parameter(mandatory)]$SurName,
+        [parameter(mandatory)]$SAMAccountName,
+        [parameter(mandatory)]$AccountPassword
     )
-    $AzureADConnectComputerName = Get-AzureADConnectComputerName
-    $SourceUserName = "sourceusertemplate"
+    $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
+    $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
 
-    $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName
+    $Path = Get-ADOrganizationalUnit -Filter * | 
+    Where-Object DistinguishedName -match "OU=Users,OU=Production Floor" |
+    Select-Object -ExpandProperty DistinguishedName
 
-    If ($UserName) {
-        [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
-        [string]$Company = $AdDomainNetBiosName.substring(0,1).toupper()+$AdDomainNetBiosName.substring(1).tolower()
-        [string]$DisplayName = $FirstName + ' ' + $LastName
-        [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
-        [string]$LogonName = $AdDomainNetBiosName + '\' + $username
-        [string]$Path = Get-ADUser $SourceUserName -Properties distinguishedname,cn | select @{n='ParentContainer';e={$_.distinguishedname -replace '^.+?,(CN|OU.+)','$1'}} | Select -ExpandProperty ParentContainer
-
-        $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
-        $SecurePW = ConvertTo-SecureString $PW -asplaintext -force       
-         
+    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName} catch {}
+    if (-not $ADUser){
         New-ADUser `
-            -SamAccountName $Username `
-            -Name $DisplayName `
-            -GivenName $FirstName `
-            -Surname $LastName `
+            -SamAccountName $SAMAccountName `
+            -Name "$GivenName $Surname" `
+            -GivenName $GivenName `
+            -Surname $Surname `
             -UserPrincipalName $UserPrincipalName `
-            -AccountPassword $SecurePW `
+            -AccountPassword $AccountPassword `
             -ChangePasswordAtLogon $false `
-            -Path $Path `
-            -Company $Company `
+            -Company "Tervis" `
             -Department "Production" `
-            -Enabled $false        
-
-        $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
-        New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
-
-        Copy-ADUserGroupMembership -Identity $SourceUserName -DestinationIdentity $UserName
-        
-        Set-ADUser -CannotChangePassword $true -PasswordNeverExpires $true -Identity $UserName
-
-        If (!($MultipleUsers)) {
-            Sync-ADDomainControllers
-        }
+            -Enabled $false `
+            -Path $Path
+        Set-ADUser -CannotChangePassword $true -PasswordNeverExpires $true -Identity $SAMAccountName
     }
 }
 
