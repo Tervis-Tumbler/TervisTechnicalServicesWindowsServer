@@ -529,7 +529,7 @@ function New-TervisWindowsUser {
         $Company = "Tervis",
         [parameter(mandatory)]$SAMAccountNameToBeLike,
         [switch]$UserHasTheirOwnDedicatedComputer
-    )    
+    )
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
 
@@ -834,4 +834,50 @@ function Update-TervisSNMPConfiguration {
             Restart-Service SNMP
         }
     }
+}
+
+function New-TervisSharedMailBox {
+    param(
+        [parameter(mandatory)]$GivenName,
+        [parameter(mandatory)]$SAMAccountName,
+        [parameter(mandatory)]$Department,
+        [parameter(mandatory)]$Surname
+    )
+     
+    $PW = Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
+    $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
+
+    $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()
+    $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
+    $path = 'OU=Shared Mailbox,OU=Exchange,DC=tervis,DC=prv'
+
+    New-ADUser `
+            -SamAccountName $SAMAccountName `
+            -Name $GivenName `
+            -GivenName $GivenName `
+            -Surname $Surname `
+            -UserPrincipalName $UserPrincipalName `
+            -Department $Department `
+            -AccountPassword $SecurePW `
+            -Path $path `
+            -PasswordNeverExpires $true `
+            -ChangePasswordAtLogon $false `
+            -Enabled $true `
+        
+    Import-TervisExchangePSSession   
+    Enable-TervisExchangeMailbox $UserPrincipalName
+    Set-ExchangeMailbox -Identity $UserPrincipalName -Type “Shared”
+     
+    Import-TervisMSOnlinePSSession
+    Connect-TervisMsolService
+
+    $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
+    $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
+    $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+    New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+
+    While (-Not ((Get-O365MoveRequest -Identity $UserPrincipalName).Status -match "Complete")) {
+            Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
+            Start-Sleep 60
+            }
 }
