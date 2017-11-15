@@ -600,6 +600,7 @@ function New-TervisWindowsUser {
         }
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
         Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
+        Enable-Office365MultiFactorAuthentication -UserPrincipalName $UserPrincipalName
     }
 }
 
