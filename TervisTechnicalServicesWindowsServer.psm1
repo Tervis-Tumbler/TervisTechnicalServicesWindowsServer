@@ -722,7 +722,7 @@ function Move-MailboxToOffice365 {
     $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
 
     Connect-ToTervisExchange
-    Connect-MsolService -Credential $Office365Credential
+    Connect-TervisMsolService
 
     [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
     if ($UserHasTheirOwnDedicatedComputer) {
