@@ -577,7 +577,7 @@ function New-TervisWindowsUser {
         $ADUser | Set-TervisMSOLUserLicense -License $License
         Start-Sleep 300
 
-        Import-TervisMSOnlinePSSession
+        Import-TervisOffice365ExchangePSSession
         $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
         $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
@@ -853,7 +853,7 @@ function New-TervisSharedMailBox {
     Enable-TervisExchangeMailbox $UserPrincipalName
     Set-ExchangeMailbox -Identity $UserPrincipalName -Type “Shared”
      
-    Import-TervisMSOnlinePSSession
+    Import-TervisOffice365ExchangePSSession
     Connect-TervisMsolService
 
     $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
@@ -862,7 +862,7 @@ function New-TervisSharedMailBox {
     New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
 
     While (-Not ((Get-O365MoveRequest -Identity $UserPrincipalName).Status -match "Complete")) {
-            Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
-            Start-Sleep 60
-            }
+        Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
+        Start-Sleep 60
+    }
 }
