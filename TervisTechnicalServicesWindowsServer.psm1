@@ -587,20 +587,24 @@ function New-TervisWindowsUser {
             Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
             Start-Sleep 60
         }
+    }
 
+    if ($ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
         if ($UserHasTheirOwnDedicatedComputer) {
             Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
+            Import-TervisExchangePSSession
+            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
         } else {
             Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
         }
-            
-        if ($UserHasTheirOwnDedicatedComputer) {
-            Import-TervisExchangePSSession
-            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
-        }
+
         Set-O365Clutter -Identity $UserPrincipalName -Enable $false
         Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
         Enable-Office365MultiFactorAuthentication -UserPrincipalName $UserPrincipalName
+    }
+
+    if ($ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
+        Throw "$($ADUser.SamAccountName) has both an Office 365 mailbox and an exchange mailbox"
     }
 }
 
