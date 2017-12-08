@@ -555,15 +555,15 @@ function New-TervisWindowsUser {
             @ADUserParameters
         
         $ADUser = Get-TervisADUser -Identity $SAMAccountName
-    }        
+        Sync-ADDomainControllers -Blocking
+    }
+    
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
     
-    Sync-ADDomainControllers -Blocking
     if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
         $ADUser | Enable-TervisExchangeMailbox
+        Sync-ADDomainControllers -Blocking
     }
-        
-    Sync-ADDomainControllers -Blocking
 
     if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
         Invoke-ADAzureSync
