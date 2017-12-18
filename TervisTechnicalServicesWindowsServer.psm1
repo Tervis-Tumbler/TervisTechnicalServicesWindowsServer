@@ -704,7 +704,8 @@ function New-TervisContractor {
 
             Add-ADGroupMember $CompanySecurityGroup -Members $UserName
             Add-ADGroupMember "CiscoVPN" -Members $UserName
-            New-MailContact -FirstName $FirstName -LastName $LastName -Name $DisplayName -ExternalEmailAddress $EmailAddress 
+            Import-TervisExchangePSSession
+            New-ExchangeMailContact -FirstName $FirstName -LastName $LastName -Name $DisplayName -ExternalEmailAddress $EmailAddress 
             
             $NewUserCredential = Import-PasswordStateApiKey -Name 'NewUser'
             New-PasswordStatePassword -ApiKey $NewUserCredential -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
