@@ -12,13 +12,19 @@
 
 function New-TervisDistributionGroup {
     param (
-        [parameter(mandatory)]$DistributionGroupName,
+        [Parameter(Mandatory,ValueFromPipeline)]$Name,
         $Members
     )
-    Import-TervisExchangePSSession
-    New-ExchangeDistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
-    Sync-ADDomainControllers -Blocking
-    Invoke-ADAzureSync
+    begin {
+        Import-TervisExchangePSSession
+    }
+    process {    
+        New-ExchangeDistributionGroup @PSBoundParameters -RequireSenderAuthenticationEnabled:$false
+    }
+    end {
+        Sync-ADDomainControllers -Blocking
+        Invoke-ADAzureSync
+    }
 }
 
 function _GetDefault {
