@@ -17,9 +17,10 @@ function New-TervisDistributionGroup {
     )
     begin {
         Import-TervisExchangePSSession
+        $ADOrganizationalUnit = Get-ADOrganizationalUnit -Filter { Name -eq "Distribution Group" }
     }
     process {    
-        New-ExchangeDistributionGroup @PSBoundParameters -RequireSenderAuthenticationEnabled:$false
+        New-ExchangeDistributionGroup @PSBoundParameters -RequireSenderAuthenticationEnabled:$false -OrganizationalUnit $ADOrganizationalUnit.DistinguishedName
     }
     end {
         Sync-ADDomainControllers -Blocking
