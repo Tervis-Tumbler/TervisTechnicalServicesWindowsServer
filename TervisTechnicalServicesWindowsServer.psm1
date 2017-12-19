@@ -13,8 +13,7 @@
 function New-TervisDistributionGroup {
     param (
         [parameter(mandatory)]$DistributionGroupName,
-        $Members,
-        [parameter(mandatory)]$AzureADConnectComputerName
+        $Members
     )
     Import-TervisExchangePSSession
     New-ExchangeDistributionGroup -Name $DistributionGroupName -Members $Members -RequireSenderAuthenticationEnabled:$false
