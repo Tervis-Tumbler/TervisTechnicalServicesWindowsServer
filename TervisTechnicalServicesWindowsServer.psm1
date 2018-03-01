@@ -583,7 +583,20 @@ function New-TervisWindowsUser {
         $ADUser | Set-TervisMSOLUserLicense -License $License
         Start-Sleep 300
 
-        Import-TervisOffice365ExchangePSSession
+        $InExchangeOnlinePowerShellModuleShell = Connect-EXOPSSessionWithinExchangeOnlineShell
+        if (-not $InExchangeOnlinePowerShellModuleShell) {
+            Import-TervisOffice365ExchangePSSession
+        } else {
+            New-Alias -Name Get-O365OutboundConnector -Value Get-OutboundConnector
+            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
+            New-Alias -Name Get-O365MoveRequest -Value Get-MoveRequest
+            New-Alias -Name Get-O365MoveRequestStatistics -Value Get-MoveRequestStatistics
+            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
+            New-Alias -Name Set-O365Mailbox -Value Set-Mailbox
+            New-Alias -Name Set-O365Clutter -Value Set-Clutter
+            New-Alias -Name Set-O365FocusedInbox -Value Set-FocusedInbox
+        }
+        
         $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
         $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
         $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
