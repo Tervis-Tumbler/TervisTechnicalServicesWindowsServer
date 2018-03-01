@@ -591,7 +591,6 @@ function New-TervisWindowsUser {
             New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
             New-Alias -Name Get-O365MoveRequest -Value Get-MoveRequest
             New-Alias -Name Get-O365MoveRequestStatistics -Value Get-MoveRequestStatistics
-            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
             New-Alias -Name Set-O365Mailbox -Value Set-Mailbox
             New-Alias -Name Set-O365Clutter -Value Set-Clutter
             New-Alias -Name Set-O365FocusedInbox -Value Set-FocusedInbox
