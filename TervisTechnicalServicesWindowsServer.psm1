@@ -566,12 +566,12 @@ function New-TervisWindowsUser {
     
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
     
-    if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
-        $ADUser | Enable-TervisExchangeMailbox
+    if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox -and -not $ADUser.ExchangeRemoteMailbox) {
+        Enable-ExchangeRemoteMailbox -identity $ADUser.SamAccountName -RemoteRoutingAddress "$($ADUser.SamAccountName)@tervis0.mail.onmicrosoft.com"
         Sync-ADDomainControllers -Blocking
     }
 
-    if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
+    if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeRemoteMailbox) {
         Invoke-ADAzureSync
 
         Connect-TervisMsolService
@@ -581,7 +581,13 @@ function New-TervisWindowsUser {
         
         $License = if ($UserHasTheirOwnDedicatedComputer) { "E3" } else { "E1" }
         $ADUser | Set-TervisMSOLUserLicense -License $License
-        Start-Sleep 300
+        
+        While (-Not $ADUser.O365Mailbox) {
+            Start-Sleep 60
+        }
+    }
+
+    if ($ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox -and $ADUser.ExchangeRemoteMailbox) {
 
         $InExchangeOnlinePowerShellModuleShell = Connect-EXOPSSessionWithinExchangeOnlineShell
         if (-not $InExchangeOnlinePowerShellModuleShell) {
@@ -596,18 +602,6 @@ function New-TervisWindowsUser {
             New-Alias -Name Set-O365FocusedInbox -Value Set-FocusedInbox
         }
         
-        $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-        $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
-        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
-
-        While (-Not ((Get-O365MoveRequest -Identity $UserPrincipalName).Status -match "Complete")) {
-            Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
-            Start-Sleep 60
-        }
-    }
-
-    if ($ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
         if ($UserHasTheirOwnDedicatedComputer) {
             Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
             Import-TervisExchangePSSession
