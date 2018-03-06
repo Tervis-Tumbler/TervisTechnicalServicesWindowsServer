@@ -525,16 +525,17 @@ function Get-TempPassword {
 
 function New-TervisWindowsUser {
     param(
-        [parameter(mandatory)]$GivenName,
-        [parameter(mandatory)]$Surname,
-        [parameter(mandatory)]$SAMAccountName,
-        [parameter(mandatory)]$ManagerSAMAccountName,
-        [parameter(mandatory)]$Department,
-        [parameter(mandatory)]$Title,
-        [parameter(mandatory)]$AccountPassword,
-        $Company = "Tervis",
-        [parameter(mandatory)]$SAMAccountNameToBeLike,
-        [switch]$UserHasTheirOwnDedicatedComputer
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]$GivenName,
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]$Surname,
+        [Parameter(Mandatory, ParameterSetName="UseExistingADUser","NewADUser")]$SAMAccountName,
+        [Parameter(Mandatory, ParameterSetName="UseExistingADUser","NewADUser")]$ManagerSAMAccountName,
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]$Department,
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]$Title,
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]$AccountPassword,
+        [Parameter(ParameterSetName="NewADUser")]$Company = "Tervis",
+        [Parameter(Mandatory)]$SAMAccountNameToBeLike,
+        [switch]$UserHasTheirOwnDedicatedComputer,
+        [Parameter(ParameterSetName="UseExistingADUser")][Switch]$UseExistingADUser
     )
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
@@ -545,7 +546,7 @@ function New-TervisWindowsUser {
     }
     
     $ADUser = try {Get-TervisADUser -Identity $SAMAccountName} catch {}
-    if (-not $ADUser){
+    if (-not $ADUser -and -not $UseExistingADUser){
         New-ADUser `
             -SamAccountName $SAMAccountName `
             -Name "$GivenName $Surname" `
@@ -562,6 +563,8 @@ function New-TervisWindowsUser {
         
         $ADUser = Get-TervisADUser -Identity $SAMAccountName
         Sync-ADDomainControllers -Blocking
+    } elseif (-not $ADUser -and $UseExistingADUser) {
+        Throw "$SAMAccountName doesn't exist but `$UseExistingADUser switch used"
     }
     
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
