@@ -524,11 +524,21 @@ function Get-TempPassword {
 }
 
 function New-TervisWindowsUser {
+    [CmdletBinding(DefaultParameterSetName="NewADUser")]
     param(
         [Parameter(Mandatory, ParameterSetName="NewADUser")]$GivenName,
         [Parameter(Mandatory, ParameterSetName="NewADUser")]$Surname,
-        [Parameter(Mandatory, ParameterSetName="UseExistingADUser","NewADUser")]$SAMAccountName,
-        [Parameter(Mandatory, ParameterSetName="UseExistingADUser","NewADUser")]$ManagerSAMAccountName,
+
+        [Parameter(Mandatory)]
+        [Parameter(ParameterSetName="UseExistingADUser")]
+        [Parameter(ParameterSetName="NewADUser")]
+        $SAMAccountName,
+
+        [Parameter(Mandatory)]
+        [Parameter(ParameterSetName="UseExistingADUser")]
+        [Parameter(ParameterSetName="NewADUser")]
+        $ManagerSAMAccountName,
+
         [Parameter(Mandatory, ParameterSetName="NewADUser")]$Department,
         [Parameter(Mandatory, ParameterSetName="NewADUser")]$Title,
         [Parameter(Mandatory, ParameterSetName="NewADUser")]$AccountPassword,
