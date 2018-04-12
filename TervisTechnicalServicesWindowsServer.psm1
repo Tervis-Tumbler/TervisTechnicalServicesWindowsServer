@@ -743,74 +743,63 @@ function New-TervisContractor {
 function Move-MailboxToOffice365 {
     param(
         [parameter(mandatory)]$UserPrincipalName,
-        [Switch]$EnableArchive = $False,
-        [switch]$UserHasTheirOwnDedicatedComputer = $False
+        [switch]$UserHasTheirOwnDedicatedComputer
     )
+    $ADUser = Get-TervisADUser -Identity $UserPrincipalName
 
-    [String]$DisplayName = Get-ADUser $UserPrincipalName.Split('@')[0] | Select -ExpandProperty Name
+    if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
+        Invoke-ADAzureSync
 
-    $Office365Credential = Import-Clixml $env:USERPROFILE\Office365EmailCredential.txt
-    $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-
-    Connect-ToTervisExchange
-    Connect-TervisMsolService
-
-    [string]$Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
-    if ($UserHasTheirOwnDedicatedComputer) {
-        $E3Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*ENTERPRISEPACK"}
-        [string]$License = $E3Licenses | Select -ExpandProperty AccountSkuId
-        if ($E3Licenses.ConsumedUnits -ge $E3Licenses.ActiveUnits) {
-            Throw "There are not any E3 licenses available to assign to this user."
+        Connect-TervisMsolService
+        While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
+            Start-Sleep 30
         }
-    } else {
-        $E1Licenses = Get-MsolAccountSku | Where {$_.AccountSkuID -like "*STANDARDPACK"}
-        [string]$License = $E1Licenses | Select -ExpandProperty AccountSkuId
-        if ($E1Licenses.ConsumedUnits -ge $E1Licenses.ActiveUnits) {
-            Throw "There are not any E1 licenses available to assign to this user."
+        
+        $License = if ($UserHasTheirOwnDedicatedComputer) { "E3" } else { "E1" }
+        $ADUser | Set-TervisMSOLUserLicense -License $License
+        Start-Sleep 300
+
+        $InExchangeOnlinePowerShellModuleShell = Connect-EXOPSSessionWithinExchangeOnlineShell
+        if (-not $InExchangeOnlinePowerShellModuleShell) {
+            Import-TervisOffice365ExchangePSSession
+        } else {
+            New-Alias -Name Get-O365OutboundConnector -Value Get-OutboundConnector
+            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
+            New-Alias -Name Get-O365MoveRequest -Value Get-MoveRequest
+            New-Alias -Name Get-O365MoveRequestStatistics -Value Get-MoveRequestStatistics
+            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
+            New-Alias -Name Set-O365Mailbox -Value Set-Mailbox
+            New-Alias -Name Set-O365Clutter -Value Set-Clutter
+            New-Alias -Name Set-O365FocusedInbox -Value Set-FocusedInbox
+        }
+        
+        $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
+        $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
+        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
+        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+
+        While (-Not ((Get-O365MoveRequest -Identity $UserPrincipalName).Status -match "Complete")) {
+            Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
+            Start-Sleep 60
         }
     }
 
-    Set-MsolUser -UserPrincipalName $UserPrincipalName -UsageLocation 'US'
-    Set-MsolUserLicense -UserPrincipalName $UserPrincipalName -AddLicenses $License
-
-    Write-Verbose "Connect to Exchange Online"
-    $Sessions = Get-PsSession
-    $Connected = $false
-    Foreach ($Session in $Sessions) {
-        if ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Opened') {
-            $Connected = $true
-        } elseif ($Session.ComputerName -eq 'ps.outlook.com' -and $Session.ConfigurationName -eq 'Microsoft.Exchange' -and $Session.State -eq 'Broken') {
-            Remove-PSSession $Session
+    if ($ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
+        if ($UserHasTheirOwnDedicatedComputer) {
+            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
+            Import-TervisExchangePSSession
+            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
+        } else {
+            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
         }
-    }
-    if ($Connected -eq $false) {
-        Write-Verbose "Connect to Exchange Online"
-        $Session = New-PSSession -ConfigurationName Microsoft.Exchange -Authentication Basic -ConnectionUri https://ps.outlook.com/powershell -AllowRedirection:$true -Credential $Office365Credential
-        Import-PSSession $Session -Prefix 'O365' -DisableNameChecking -AllowClobber
+
+        Set-O365Clutter -Identity $UserPrincipalName -Enable $false
+        Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
+        Enable-Office365MultiFactorAuthentication -UserPrincipalName $UserPrincipalName
     }
 
-    [string]$InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
-    New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
-
-    Write-Verbose "Migrating the mailbox"
-    While (!((Get-O365MoveRequest $DisplayName).Status -eq 'Completed')) {
-        Get-O365MoveRequestStatistics $UserPrincipalName | Select PercentComplete
-        Start-Sleep 60
-    }
-
-    if ($UserHasTheirOwnDedicatedComputer) {
-        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
-    } else {
-        Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
-    }
-    Set-O365Clutter -Identity $UserPrincipalName -Enable $false
-    Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
-
-    if (($EnableArchive -eq $True) -and ($UserHasTheirOwnDedicatedComputer -eq $False)) {
-        Throw "In-place archive can only be enabled on mailboxes with an E3 license."
-    }
-    if (($EnableArchive -eq $True) -and ($UserHasTheirOwnDedicatedComputer)) {
-        Enable-remoteMailbox $UserPrincipalName -Archive
+    if ($ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
+        Throw "$($ADUser.SamAccountName) has both an Office 365 mailbox and an exchange mailbox"
     }
 }
 
