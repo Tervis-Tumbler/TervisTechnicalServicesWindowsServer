@@ -885,3 +885,11 @@ function New-TervisSharedMailBox {
         Start-Sleep 60
     }
 }
+
+function Invoke-WindowsAdminCenterGatewayProvision {
+    param (
+        $EnvironmentName = "Infrastructure"
+    )
+    Invoke-ApplicationProvision -ApplicationName WindowsAdminCenterGateway -EnvironmentName $EnvironmentName
+    $Nodes = Get-TervisApplicationNode -ApplicationName WindowsAdminCenterGateway -EnvironmentName $EnvironmentName
+}
