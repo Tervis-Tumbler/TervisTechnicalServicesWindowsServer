@@ -1,7 +1,7 @@
 ﻿function Install-TervisTechnicalServicesWindowsServer {
     param(
         [System.Management.Automation.PSCredential]$Office365Credential = $(get-credential -message "Please supply the credentials to access ExchangeOnline. Username must be in the form UserName@Domain.com"),
-        [System.Management.Automation.PSCredential]$InternalCredential = $(get-credential -message "Please supply the credentials to access internal resources. Username must be in the form DOMAIN\username"),
+        [System.Management.Automation.PSCredential]$InternalCredential = $(get-credential -message "Please supply the credentials to access internal resources. Username must be in the form DOMAIN\username")
     )
     $Office365Credential | Export-Clixml $env:USERPROFILE\Office365EmailCredential.txt    
     $InternalCredential | Export-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
