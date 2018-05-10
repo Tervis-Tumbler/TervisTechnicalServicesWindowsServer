@@ -196,7 +196,7 @@ function New-TervisWindowsUser {
         Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
     }
     
-    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName} catch {}
+    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties } catch {}
     if (-not $ADUser -and -not $UseExistingADUser){
         New-ADUser `
             -SamAccountName $SAMAccountName `
@@ -212,7 +212,7 @@ function New-TervisWindowsUser {
             -Enabled $true `
             @ADUserParameters
         
-        $ADUser = Get-TervisADUser -Identity $SAMAccountName
+        $ADUser = Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties
         Sync-ADDomainControllers -Blocking
     } elseif (-not $ADUser -and $UseExistingADUser) {
         Throw "$SAMAccountName doesn't exist but `$UseExistingADUser switch used"
@@ -288,7 +288,7 @@ function New-TervisProductionUser {
     Where-Object DistinguishedName -match "OU=Users,OU=Production Floor" |
     Select-Object -ExpandProperty DistinguishedName
 
-    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName} catch {}
+    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties} catch {}
     if (-not $ADUser){
         New-ADUser `
             -SamAccountName $SAMAccountName `
@@ -385,7 +385,7 @@ function Move-MailboxToOffice365 {
         [parameter(mandatory)]$UserPrincipalName,
         [switch]$UserHasTheirOwnDedicatedComputer
     )
-    $ADUser = Get-TervisADUser -Filter {UserPrincipalName -eq $UserPrincipalName}
+    $ADUser = Get-TervisADUser -Filter {UserPrincipalName -eq $UserPrincipalName} -IncludeMailboxProperties
     if (-not $ADUser) {throw "User not found in AD"}
 
     if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
