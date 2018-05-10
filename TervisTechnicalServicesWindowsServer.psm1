@@ -745,7 +745,8 @@ function Move-MailboxToOffice365 {
         [parameter(mandatory)]$UserPrincipalName,
         [switch]$UserHasTheirOwnDedicatedComputer
     )
-    $ADUser = Get-TervisADUser -Identity $UserPrincipalName
+    $ADUser = Get-TervisADUser -Filter {UserPrincipalName -eq $UserPrincipalName}
+    if (-not $ADUser) {throw "User not found in AD"}
 
     if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
         Invoke-ADAzureSync
