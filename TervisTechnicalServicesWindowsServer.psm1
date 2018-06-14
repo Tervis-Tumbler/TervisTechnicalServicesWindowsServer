@@ -350,9 +350,7 @@ function New-TervisSharedMailBox {
         [parameter(mandatory)]$Surname
     )
      
-    $PW = (Get-PasswordstateRandomPassword) | select -ExpandProperty Password
-    $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
-
+    $SecurePW = (Get-PasswordstateRandomPassword) | select -ExpandProperty Password | ConvertTo-SecureString -asplaintext -force
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
     $path = 'OU=Shared Mailbox,OU=Exchange,DC=tervis,DC=prv'
