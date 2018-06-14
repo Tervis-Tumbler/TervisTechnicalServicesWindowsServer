@@ -350,7 +350,7 @@ function New-TervisSharedMailBox {
         [parameter(mandatory)]$Surname
     )
      
-    $PW = Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
+    $PW = (Get-PasswordstateRandomPassword) | select -ExpandProperty Password
     $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
 
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()
