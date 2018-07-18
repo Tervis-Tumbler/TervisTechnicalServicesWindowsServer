@@ -170,10 +170,10 @@ function New-TervisProductionUser {
 function New-TervisContractor {
     [CmdletBinding()]
     Param(
-        [parameter(mandatory)]$FirstName,
-        [parameter(mandatory)]$LastName,
-        [parameter(Mandatory)]$EmailAddress,
-        [parameter(mandatory)]$ManagerUserName,
+        [parameter(mandatory)]$GivenName,
+        [parameter(mandatory)]$SurName,
+        [parameter(Mandatory)]$ExternalEmailAddress,
+        [parameter(mandatory)]$TervisDepartmentManagerUserName,
         [parameter(mandatory)]$Title,
         [parameter(Mandatory)]$Description
     )
@@ -197,27 +197,26 @@ function New-TervisContractor {
     }
     
     process {
-        $UserName = Get-AvailableSAMAccountName -GivenName $FirstName -Surname $LastName        
+        $UserName = Get-AvailableSAMAccountName -GivenName $GivenName -Surname $SurName        
         if ($UserName) {
     
             [string]$AdDomainNetBiosName = (Get-ADDomain | Select -ExpandProperty NetBIOSName).substring(0).tolower()
-            [string]$DisplayName = $FirstName + ' ' + $LastName
+            [string]$DisplayName = $GivenName + ' ' + $SurName
             [string]$UserPrincipalName = $username + '@' + $AdDomainNetBiosName + '.com'
             [string]$LogonName = $AdDomainNetBiosName + '\' + $username
-            [string]$Path = Get-ADUser $ManagerUserName | select distinguishedname -ExpandProperty distinguishedname | Get-ADObjectParentContainer
-            $ManagerDN = Get-ADUser $ManagerUserName | Select -ExpandProperty DistinguishedName
+            [string]$Path = Get-ADUser $TervisDepartmentManagerUserName | select distinguishedname -ExpandProperty distinguishedname | Get-ADObjectParentContainer
+            $ManagerDN = Get-ADUser $TervisDepartmentManagerUserName | Select -ExpandProperty DistinguishedName
             if ((Get-ADGroup -Filter {SamAccountName -eq $Company}) -eq $null ){
                 New-ADGroup -Name $Company -GroupScope Universal -GroupCategory Security
             }
             $CompanySecurityGroup = Get-ADGroup -Identity $Company
-            $PW= Get-TempPassword -MinPasswordLength 8 -MaxPasswordLength 12 -FirstChar abcdefghjkmnpqrstuvwxyzABCEFGHJKLMNPQRSTUVWXYZ23456789
-            $SecurePW = ConvertTo-SecureString $PW -asplaintext -force
+            $SecurePW = (New-PasswordstatePassword -PasswordListId 78 -Title "$GivenName $SurName" -Username $SAMAccountName -GeneratePassword) | Select-Object -ExpandProperty Password | ConvertTo-SecureString -AsPlainText -Force
     
             New-ADUser `
                 -SamAccountName $Username `
                 -Name $DisplayName `
-                -GivenName $FirstName `
-                -Surname $LastName `
+                -GivenName $GivenName `
+                -Surname $SurName `
                 -UserPrincipalName $UserPrincipalName `
                 -AccountPassword $SecurePW `
                 -ChangePasswordAtLogon $true `
@@ -232,11 +231,12 @@ function New-TervisContractor {
             Add-ADGroupMember $CompanySecurityGroup -Members $UserName
             Add-ADGroupMember "CiscoVPN" -Members $UserName
             Import-TervisExchangePSSession
-            New-ExchangeMailContact -FirstName $FirstName -LastName $LastName -Name $DisplayName -ExternalEmailAddress $EmailAddress 
+            New-ExchangeMailContact -FirstName $GivenName -LastName $SurName -Name $DisplayName -ExternalEmailAddress $ExternalEmailAddress
             
             New-PasswordStatePassword -PasswordListId 78 -Title $DisplayName -Username $LogonName -Password $SecurePW
 
-            Send-TervisContractorWelcomeLetter -Name $DisplayName -EmailAddress $EmailAddress
+            Send-TervisContractorWelcomeLetter -Name $DisplayName -EmailAddress $ExternalEmailAddress
+
         }
     }
 }
