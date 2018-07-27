@@ -47,7 +47,8 @@ function New-TervisWindowsUser {
         [Parameter(ParameterSetName="NewADUser")]$Company = "Tervis",
         [Parameter(Mandatory)]$SAMAccountNameToBeLike,
         [switch]$UserHasTheirOwnDedicatedComputer,
-        [Parameter(ParameterSetName="UseExistingADUser")][Switch]$UseExistingADUser
+        [Parameter(ParameterSetName="UseExistingADUser")][Switch]$UseExistingADUser,
+        [switch]$ADUserAccountCreationOnly
     )
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
@@ -80,6 +81,10 @@ function New-TervisWindowsUser {
     }
     
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
+
+    if ($ADUserAccountCreationOnly) {
+        return
+    }
     
     if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox -and -not $ADUser.ExchangeRemoteMailbox) {
         Enable-ExchangeRemoteMailbox -identity $ADUser.SamAccountName -RemoteRoutingAddress "$($ADUser.SamAccountName)@tervis0.mail.onmicrosoft.com"
