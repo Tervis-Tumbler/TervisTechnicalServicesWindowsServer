@@ -251,7 +251,8 @@ function Move-MailboxToOffice365 {
         [parameter(mandatory)]$UserPrincipalName,
         [switch]$UserHasTheirOwnDedicatedComputer
     )
-
+    #https://github.com/MicrosoftDocs/office-docs-powershell/issues/1653
+    # use $ADUser.UserPrincipalName instead of $UserPrincipalName to work around issue linked above
     $ADUser = Get-TervisADUser -Filter {UserPrincipalName -eq $UserPrincipalName} -IncludeMailboxProperties
     if (-not $ADUser) {throw "User not found in AD"}
 
