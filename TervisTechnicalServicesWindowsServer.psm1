@@ -251,6 +251,7 @@ function Move-MailboxToOffice365 {
         [parameter(mandatory)]$UserPrincipalName,
         [switch]$UserHasTheirOwnDedicatedComputer
     )
+
     $ADUser = Get-TervisADUser -Filter {UserPrincipalName -eq $UserPrincipalName} -IncludeMailboxProperties
     if (-not $ADUser) {throw "User not found in AD"}
 
@@ -258,7 +259,7 @@ function Move-MailboxToOffice365 {
         Invoke-ADAzureSync
 
         Connect-TervisMsolService
-        While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
+        While (-not (Get-MsolUser -UserPrincipalName $ADUser.UserPrincipalName -ErrorAction SilentlyContinue)) {
             Start-Sleep 30
         }
         
@@ -282,27 +283,27 @@ function Move-MailboxToOffice365 {
         
         $Office365DeliveryDomain = Get-MsolDomain | Where Name -Like "*.mail.onmicrosoft.com" | Select -ExpandProperty Name
         $InternalMailServerPublicDNS = Get-O365OutboundConnector | Where Name -Match 'Outbound to' | Select -ExpandProperty SmartHosts
-        $OnPremiseCredential = Import-Clixml $env:USERPROFILE\OnPremiseExchangeCredential.txt
-        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $UserPrincipalName -SuspendWhenReadyToComplete:$false
+        $OnPremiseCredential = Get-Credential -Message "tervis\ credential for local exchange server"
+        New-O365MoveRequest -Remote -RemoteHostName $InternalMailServerPublicDNS -RemoteCredential $OnPremiseCredential -TargetDeliveryDomain $Office365DeliveryDomain -identity $ADUser.UserPrincipalName -SuspendWhenReadyToComplete:$false
 
-        While (-Not ((Get-O365MoveRequest -Identity $UserPrincipalName).Status -match "Complete")) {
-            Get-O365MoveRequestStatistics -Identity $UserPrincipalName | Select StatusDetail,PercentComplete
+        While (-Not ((Get-O365MoveRequest -Identity $ADUser.UserPrincipalName).Status -match "Complete")) {
+            Get-O365MoveRequestStatistics -Identity $ADUser.UserPrincipalName | Select StatusDetail,PercentComplete
             Start-Sleep 60
         }
     }
 
     if ($ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox) {
         if ($UserHasTheirOwnDedicatedComputer) {
-            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
+            Set-O365Mailbox $ADUser.UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
             Import-TervisExchangePSSession
-            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
+            Enable-ExchangeRemoteMailbox $ADUser.UserPrincipalName -Archive
         } else {
-            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
+            Set-O365Mailbox $ADUser.UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
         }
 
-        Set-O365Clutter -Identity $UserPrincipalName -Enable $false
-        Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
-        Enable-Office365MultiFactorAuthentication -UserPrincipalName $UserPrincipalName
+        Set-O365Clutter -Identity $ADUser.UserPrincipalName -Enable $false
+        Set-O365FocusedInbox -Identity $ADUser.UserPrincipalName -FocusedInboxOn $false
+        Enable-Office365MultiFactorAuthentication -UserPrincipalName $ADUser.UserPrincipalName
     }
 
     if ($ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
