@@ -248,12 +248,13 @@ function New-TervisContractor {
 
 function Move-MailboxToOffice365 {
     param(
-        [parameter(mandatory)]$UserPrincipalName,
+        [parameter(mandatory)]$Identity,
         [switch]$UserHasTheirOwnDedicatedComputer
     )
     #https://github.com/MicrosoftDocs/office-docs-powershell/issues/1653
     # use $ADUser.UserPrincipalName instead of $UserPrincipalName to work around issue linked above
-    $ADUser = Get-TervisADUser -Filter {UserPrincipalName -eq $UserPrincipalName} -IncludeMailboxProperties
+    $UserPrincipalName = $PSBoundParameters.UserPrincipalName
+    $ADUser = Get-TervisADUser -Identity $Identity -IncludeMailboxProperties
     if (-not $ADUser) {throw "User not found in AD"}
 
     if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
@@ -276,7 +277,6 @@ function Move-MailboxToOffice365 {
             New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
             New-Alias -Name Get-O365MoveRequest -Value Get-MoveRequest
             New-Alias -Name Get-O365MoveRequestStatistics -Value Get-MoveRequestStatistics
-            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
             New-Alias -Name Set-O365Mailbox -Value Set-Mailbox
             New-Alias -Name Set-O365Clutter -Value Set-Clutter
             New-Alias -Name Set-O365FocusedInbox -Value Set-FocusedInbox
