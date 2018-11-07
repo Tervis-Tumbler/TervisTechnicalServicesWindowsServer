@@ -235,6 +235,7 @@ function New-TervisContractor {
 
             Add-ADGroupMember $CompanySecurityGroup -Members $UserName
             Add-ADGroupMember "CiscoVPN" -Members $UserName
+            Add-ADGroupMember "LongPWPolicy" -Members $UserName
             Import-TervisExchangePSSession
             New-ExchangeMailContact -FirstName $GivenName -LastName $SurName -Name $DisplayName -ExternalEmailAddress $ExternalEmailAddress
             
