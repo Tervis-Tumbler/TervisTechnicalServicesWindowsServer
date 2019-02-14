@@ -401,3 +401,19 @@ function Invoke-WindowsAdminCenterGatewayProvision {
     Invoke-ApplicationProvision -ApplicationName WindowsAdminCenterGateway -EnvironmentName $EnvironmentName
     $Nodes = Get-TervisApplicationNode -ApplicationName WindowsAdminCenterGateway -EnvironmentName $EnvironmentName
 }
+
+function Invoke-WindowsUpdateRepair {
+    param (
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$ComputerName
+    )
+    process {
+        Set-Service -ComputerName $ComputerName -Name wuauserv -StartupType Disabled
+        Restart-Computer -ComputerName $ComputerName -Force -Wait
+        Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+            dism /online /cleanup-image /restorehealth 
+            sfc /scannow
+        }
+        Restart-Computer -ComputerName $ComputerName -Force -Wait
+        Set-Service -ComputerName $ComputerName -Name wuauserv -StartupType Manual
+    }
+}
