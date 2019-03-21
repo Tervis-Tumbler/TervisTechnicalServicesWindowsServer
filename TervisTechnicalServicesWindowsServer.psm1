@@ -28,12 +28,20 @@ function New-TervisDistributionGroup {
 function New-TervisWindowsUser {
     [CmdletBinding(DefaultParameterSetName="NewADUser")]
     param(
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]$GivenName,
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]$Surname,
+        [Parameter(Mandatory)]
+        [Parameter(ParameterSetName="NewADUser")]
+        [Parameter(ParameterSetName="NewADUserContractor")]
+        $GivenName,
+        
+        [Parameter(Mandatory)]
+        [Parameter(ParameterSetName="NewADUser")]
+        [Parameter(ParameterSetName="NewADUserContractor")]
+        $Surname,
 
         [Parameter(Mandatory)]
-        [Parameter(ParameterSetName="UseExistingADUser")]
         [Parameter(ParameterSetName="NewADUser")]
+        [Parameter(ParameterSetName="NewADUserContractor")]
+        [Parameter(ParameterSetName="UseExistingADUser")]
         $SAMAccountName,
 
         [Parameter(Mandatory)]
@@ -41,38 +49,49 @@ function New-TervisWindowsUser {
         [Parameter(ParameterSetName="NewADUser")]
         $ManagerSAMAccountName,
 
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]$Department,
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]$Title,
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]$AccountPassword,
-        [Parameter(ParameterSetName="NewADUser")]$Company = "Tervis",
-        [Parameter(Mandatory)]$SAMAccountNameToBeLike,
+        [Parameter(ParameterSetName="NewADUser")]$Department,
+        [Parameter(ParameterSetName="NewADUser")]$Title,
+        
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]
+        [Parameter(Mandatory, ParameterSetName="NewADUserContractor")]
+        $AccountPassword,
+
+        [Parameter(ParameterSetName="NewADUser")]
+        [Parameter(Mandatory, ParameterSetName="NewADUserContractor")]
+        $Company,
+
+        [Parameter(Mandatory, ParameterSetName="NewADUser")]
+        $SAMAccountNameToBeLike,
+        
         [switch]$UserHasTheirOwnDedicatedComputer,
-        [Parameter(ParameterSetName="UseExistingADUser")][Switch]$UseExistingADUser,
-        [switch]$ADUserAccountCreationOnly
+
+        [Parameter(ParameterSetName="UseExistingADUser")]
+        [Switch]$UseExistingADUser,
+
+        [switch]$ADUserAccountCreationOnly,
+
+        [Parameter(Mandatory, ParameterSetName="NewADUserContractor")]
+        [Switch]$Contractor
     )
+
     $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
     $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
-
-    $ADUserParameters = @{
-        Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
-        Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
-    }
     
     $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties } catch {}
     if (-not $ADUser -and -not $UseExistingADUser){
-        New-ADUser `
-            -SamAccountName $SAMAccountName `
+        $ADUserParameters = @{
+            Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
+            Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
+        }
+
+        $ADUserParameters += $PSBoundParameters | 
+        ConvertFrom-PSBoundParameters -Property SAMAccountName, GivenName, Surname, AccountPassword, Company, Department, Title -AsHashTable
+
+        New-ADUser @ADUserParameters `
             -Name "$GivenName $Surname" `
-            -GivenName $GivenName `
-            -Surname $Surname `
             -UserPrincipalName $UserPrincipalName `
-            -AccountPassword $AccountPassword `
             -ChangePasswordAtLogon $true `
-            -Company $Company `
-            -Department $Department `
-            -Title $Title `
-            -Enabled $true `
-            @ADUserParameters
+            -Enabled $true
         
         $ADUser = Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties
         Sync-ADDomainControllers -Blocking
@@ -82,61 +101,8 @@ function New-TervisWindowsUser {
     
     Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
 
-    if ($ADUserAccountCreationOnly) {
-        return
-    }
-    
-    if (-not $ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox -and -not $ADUser.ExchangeRemoteMailbox) {
-        Enable-ExchangeRemoteMailbox -identity $ADUser.SamAccountName -RemoteRoutingAddress "$($ADUser.SamAccountName)@tervis0.mail.onmicrosoft.com"
-        Sync-ADDomainControllers -Blocking
-    }
-
-    if (-not $ADUser.O365Mailbox -and $ADUser.ExchangeRemoteMailbox) {
-        Invoke-ADAzureSync
-
-        Connect-TervisMsolService
-        While (-not (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue)) {
-            Start-Sleep 30
-        }
-        
-        $License = if ($UserHasTheirOwnDedicatedComputer) { "E3" } else { "E1" }
-        $ADUser | Set-TervisMSOLUserLicense -License $License
-        
-        While (-Not $ADUser.O365Mailbox) {
-            Start-Sleep 60
-        }
-    }
-
-    if ($ADUser.O365Mailbox -and -not $ADUser.ExchangeMailbox -and $ADUser.ExchangeRemoteMailbox) {
-
-        $InExchangeOnlinePowerShellModuleShell = Connect-EXOPSSessionWithinExchangeOnlineShell
-        if (-not $InExchangeOnlinePowerShellModuleShell) {
-            Import-TervisOffice365ExchangePSSession
-        } else {
-            New-Alias -Name Get-O365OutboundConnector -Value Get-OutboundConnector
-            New-Alias -Name New-O365MoveRequest -Value New-MoveRequest
-            New-Alias -Name Get-O365MoveRequest -Value Get-MoveRequest
-            New-Alias -Name Get-O365MoveRequestStatistics -Value Get-MoveRequestStatistics
-            New-Alias -Name Set-O365Mailbox -Value Set-Mailbox
-            New-Alias -Name Set-O365Clutter -Value Set-Clutter
-            New-Alias -Name Set-O365FocusedInbox -Value Set-FocusedInbox
-        }
-        
-        if ($UserHasTheirOwnDedicatedComputer) {
-            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00 -LitigationHoldDuration 2555 -LitigationHoldEnabled $true
-            Import-TervisExchangePSSession
-            Enable-ExchangeRemoteMailbox $UserPrincipalName -Archive
-        } else {
-            Set-O365Mailbox $UserPrincipalName -AuditOwner MailboxLogin,HardDelete,SoftDelete,Move,MoveToDeletedItems -AuditDelegate HardDelete,SendAs,Move,MoveToDeletedItems,SoftDelete -AuditEnabled $true -RetainDeletedItemsFor 30.00:00:00
-        }
-
-        Set-O365Clutter -Identity $UserPrincipalName -Enable $false
-        Set-O365FocusedInbox -Identity $UserPrincipalName -FocusedInboxOn $false
-        Enable-Office365MultiFactorAuthentication -UserPrincipalName $UserPrincipalName
-    }
-
-    if ($ADUser.O365Mailbox -and $ADUser.ExchangeMailbox) {
-        Throw "$($ADUser.SamAccountName) has both an Office 365 mailbox and an exchange mailbox"
+    if (-not $Contractor -and -not $ADUserAccountCreationOnly) {
+        New-TervisMSOLUser -ADUser $ADUser -UserHasTheirOwnDedicatedComputer:$UserHasTheirOwnDedicatedComputer
     }
 }
 
