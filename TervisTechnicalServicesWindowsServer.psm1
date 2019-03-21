@@ -140,38 +140,6 @@ function New-TervisWindowsUser {
     }
 }
 
-function New-TervisProductionUser {
-    param(
-        [parameter(mandatory)]$GivenName,
-        [parameter(mandatory)]$SurName,
-        [parameter(mandatory)]$SAMAccountName,
-        [parameter(mandatory)]$AccountPassword
-    )
-    $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
-    $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
-
-    $Path = Get-ADOrganizationalUnit -Filter * | 
-    Where-Object DistinguishedName -match "OU=Users,OU=Production Floor" |
-    Select-Object -ExpandProperty DistinguishedName
-
-    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties} catch {}
-    if (-not $ADUser){
-        New-ADUser `
-            -SamAccountName $SAMAccountName `
-            -Name "$GivenName $Surname" `
-            -GivenName $GivenName `
-            -Surname $Surname `
-            -UserPrincipalName $UserPrincipalName `
-            -AccountPassword $AccountPassword `
-            -ChangePasswordAtLogon $false `
-            -Company "Tervis" `
-            -Department "Production" `
-            -Enabled $false `
-            -Path $Path
-        Set-ADUser -CannotChangePassword $true -PasswordNeverExpires $true -Identity $SAMAccountName
-    }
-}
-
 function New-TervisContractor {
     [CmdletBinding()]
     Param(
