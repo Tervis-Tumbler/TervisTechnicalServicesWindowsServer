@@ -64,14 +64,21 @@ function New-TervisWindowsUser {
         [Parameter(Mandatory, ParameterSetName="NewADUser")]
         $SAMAccountNameToBeLike,
         
+        [Parameter(ParameterSetName="NewADUser")]
+        [Parameter(ParameterSetName="UseExistingADUser")]
         [switch]$UserHasTheirOwnDedicatedComputer,
 
         [Parameter(ParameterSetName="UseExistingADUser")]
         [Switch]$UseExistingADUser,
 
+        [Parameter(ParameterSetName="NewADUser")]
+        [Parameter(ParameterSetName="UseExistingADUser")]
         [switch]$ADUserAccountCreationOnly,
 
-        [Parameter(Mandatory, ParameterSetName="NewADUserContractor")]
+        [Parameter(ParameterSetName="NewADUser")]
+        [Switch]$NewADUser,
+
+        [Parameter(ParameterSetName="NewADUserContractor")]
         [Switch]$Contractor
     )
 
@@ -81,7 +88,14 @@ function New-TervisWindowsUser {
     $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties } catch {}
     if (-not $ADUser -and -not $UseExistingADUser){
         $ADUserParameters = @{
-            Path = Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
+            Path = $(
+                if (-not $Contractor) {
+                    Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
+                } elseif ($Contractor) {
+                    Get-ADOrganizationalUnit -filter {Name -eq  "Company - Vendors"} |
+                    Select-Object -ExpandProperty DistinguishedName
+                }
+            )
             Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
         }
 
@@ -100,7 +114,9 @@ function New-TervisWindowsUser {
         Throw "$SAMAccountName doesn't exist but `$UseExistingADUser switch used"
     }
     
-    Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
+    if ($SAMAccountNameToBeLike) {
+        Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
+    }
 
     if (-not $Contractor -and -not $ADUserAccountCreationOnly) {
         New-TervisMSOLUser -ADUser $ADUser -UserHasTheirOwnDedicatedComputer:$UserHasTheirOwnDedicatedComputer
@@ -125,7 +141,7 @@ function New-TervisContractor {
         $Company = $PsBoundParameters.Company
     }
     process {
-        New-TervisPerson @PsBoundParameters
+        New-TervisPerson @PsBoundParameters -Contractor
     }
 }
 
