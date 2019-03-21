@@ -151,24 +151,13 @@ function New-TervisContractor {
         [parameter(Mandatory)]$Description
     )
     DynamicParam {
-            $ParameterName = 'Company'
-            $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
-            $AttributeCollection = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
-            $ParameterAttribute = New-Object System.Management.Automation.ParameterAttribute
-            $ParameterAttribute.Mandatory = $true
-            $ParameterAttribute.Position = 4
-            $AttributeCollection.Add($ParameterAttribute)
-            $arrSet = Get-TervisContractorDefinition -All | select Name -ExpandProperty Name
-            $ValidateSetAttribute = New-Object System.Management.Automation.ValidateSetAttribute($arrSet)
-            $AttributeCollection.Add($ValidateSetAttribute)
-            $RuntimeParameter = New-Object System.Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
-            $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
-            return $RuntimeParameterDictionary
+        New-DynamicParameter -Name Company -Mandatory -Position 4 -ValidateSet $(
+            Get-TervisContractorDefinition -All | select Name -ExpandProperty Name
+        )
     }
     begin {
-        $Company = $PsBoundParameters[$ParameterName]
+        $Company = $PsBoundParameters.Company
     }
-    
     process {
         $UserName = Get-AvailableSAMAccountName -GivenName $GivenName -Surname $SurName        
         if ($UserName) {
