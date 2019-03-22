@@ -47,17 +47,17 @@ function New-TervisWindowsUser {
     DynamicParam {
         $DynamicParameters = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
         if ($Type -eq "Employee") {
-            New-DynamicParameter -Name UseExistingADUser -Type Switch -Position 30 -ParameterSetName UseExistingADUser -Dictionary $DynamicParameters
-            New-DynamicParameter -Name SAMAccountNameToBeLike -Type String -Position 29 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name UseExistingADUser -Type Switch -ParameterSetName UseExistingADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name SAMAccountNameToBeLike -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
         }
         if (-not $UseExistingADUser) {
-            New-DynamicParameter -Name GivenName -Type String -Position 2 -ParameterSetName NewADUser -Dictionary $DynamicParameters
-            New-DynamicParameter -Name Surname -Type String -Position 3 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name GivenName -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name Surname -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
         }
 
         if (-not $UseExistingADUser -and $Type -eq "Employee") {
-            New-DynamicParameter -Name Department -Type String -Position 4 -ParameterSetName NewADUser -Dictionary $DynamicParameters
-            New-DynamicParameter -Name Title -Type String -Position 5 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name Department -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name Title -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
         }
 
         $DynamicParameters
@@ -120,10 +120,8 @@ function New-TervisContractor {
             Get-TervisContractorDefinition -All | select Name -ExpandProperty Name
         )
     }
-    begin {
-        $Company = $PsBoundParameters.Company
-    }
     process {
+        New-DynamicParameter -CreateVariables -BoundParameters $PSBoundParameters
         New-TervisPerson @PsBoundParameters -Contractor
     }
 }
