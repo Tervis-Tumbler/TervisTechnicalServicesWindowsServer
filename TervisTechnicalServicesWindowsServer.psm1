@@ -63,6 +63,7 @@ function New-TervisWindowsUser {
         $DynamicParameters
     }
     process {
+        New-DynamicParameter -CreateVariables -BoundParameters $PSBoundParameters
         $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
         $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
         
