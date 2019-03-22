@@ -26,100 +26,82 @@ function New-TervisDistributionGroup {
 }
 
 function New-TervisWindowsUser {
-    [CmdletBinding(DefaultParameterSetName="NewADUser")]
-    param(
+    param (
+        [ValidateSet("Employee","Contractor")]
         [Parameter(Mandatory)]
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(ParameterSetName="NewADUserContractor")]
-        $GivenName,
-        
-        [Parameter(Mandatory)]
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(ParameterSetName="NewADUserContractor")]
-        $Surname,
+        $Type,
 
         [Parameter(Mandatory)]
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(ParameterSetName="NewADUserContractor")]
-        [Parameter(ParameterSetName="UseExistingADUser")]
         $SAMAccountName,
 
         [Parameter(Mandatory)]        
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(ParameterSetName="NewADUserContractor")]
-        [Parameter(ParameterSetName="UseExistingADUser")]
         $ManagerSAMAccountName,
-
-        [Parameter(ParameterSetName="NewADUser")]$Department,
-        [Parameter(ParameterSetName="NewADUser")]$Title,
         
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]
-        [Parameter(Mandatory, ParameterSetName="NewADUserContractor")]
-        $AccountPassword,
+        [Parameter(Mandatory)]
+        [System.Security.SecureString]$AccountPassword,
 
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(Mandatory, ParameterSetName="NewADUserContractor")]
         $Company,
-
-        [Parameter(Mandatory, ParameterSetName="NewADUser")]
-        $SAMAccountNameToBeLike,
-        
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(ParameterSetName="UseExistingADUser")]
         [switch]$UserHasTheirOwnDedicatedComputer,
-
-        [Parameter(ParameterSetName="UseExistingADUser")]
-        [Switch]$UseExistingADUser,
-
-        [Parameter(ParameterSetName="NewADUser")]
-        [Parameter(ParameterSetName="UseExistingADUser")]
-        [switch]$ADUserAccountCreationOnly,
-
-        [Parameter(ParameterSetName="NewADUser")]
-        [Switch]$NewADUser,
-
-        [Parameter(ParameterSetName="NewADUserContractor")]
-        [Switch]$Contractor
+        [switch]$ADUserAccountCreationOnly
     )
-
-    $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
-    $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
-    
-    $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties } catch {}
-    if (-not $ADUser -and -not $UseExistingADUser){
-        $ADUserParameters = @{
-            Path = $(
-                if (-not $Contractor) {
-                    Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
-                } elseif ($Contractor) {
-                    Get-ADOrganizationalUnit -filter {Name -eq  "Company - Vendors"} |
-                    Select-Object -ExpandProperty DistinguishedName
-                }
-            )
-            Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
+    DynamicParam {
+        $DynamicParameters = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+        if ($Type -eq "Employee") {
+            New-DynamicParameter -Name UseExistingADUser -Type Switch -Position 30 -ParameterSetName UseExistingADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name SAMAccountNameToBeLike -Type String -Position 29 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+        }
+        if (-not $UseExistingADUser) {
+            New-DynamicParameter -Name GivenName -Type String -Position 2 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name Surname -Type String -Position 3 -ParameterSetName NewADUser -Dictionary $DynamicParameters
         }
 
-        $ADUserParameters += $PSBoundParameters | 
-        ConvertFrom-PSBoundParameters -Property SAMAccountName, GivenName, Surname, AccountPassword, Company, Department, Title -AsHashTable
+        if (-not $UseExistingADUser -and $Type -eq "Employee") {
+            New-DynamicParameter -Name Department -Type String -Position 4 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+            New-DynamicParameter -Name Title -Type String -Position 5 -ParameterSetName NewADUser -Dictionary $DynamicParameters
+        }
 
-        New-ADUser @ADUserParameters `
-            -Name "$GivenName $Surname" `
-            -UserPrincipalName $UserPrincipalName `
-            -ChangePasswordAtLogon $true `
-            -Enabled $true
+        $DynamicParameters
+    }
+    process {
+        $AdDomainNetBiosName = (Get-ADDomain | Select-Object -ExpandProperty NetBIOSName).tolower()        
+        $UserPrincipalName = "$SAMAccountName@$AdDomainNetBiosName.com"
         
-        $ADUser = Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties
-        Sync-ADDomainControllers -Blocking
-    } elseif (-not $ADUser -and $UseExistingADUser) {
-        Throw "$SAMAccountName doesn't exist but `$UseExistingADUser switch used"
-    }
+        $ADUser = try {Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties } catch {}
+        if (-not $ADUser -and -not $UseExistingADUser) {
+            $ADUserParameters = @{
+                Path = $(
+                    if ($SAMAccountNameToBeLike) {
+                        Get-ADUserOU -SAMAccountName $SAMAccountNameToBeLike
+                    } else {
+                        Get-ADOrganizationalUnit -filter {Name -eq  "Company - Vendors"} |
+                        Select-Object -ExpandProperty DistinguishedName
+                    }
+                )
+                Manager = Get-ADUser $ManagerSAMAccountName | Select-Object -ExpandProperty DistinguishedName   
+            }
     
-    if ($SAMAccountNameToBeLike) {
-        Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
-    }
-
-    if (-not $Contractor -and -not $ADUserAccountCreationOnly) {
-        New-TervisMSOLUser -ADUser $ADUser -UserHasTheirOwnDedicatedComputer:$UserHasTheirOwnDedicatedComputer
+            $ADUserParameters += $PSBoundParameters | 
+            ConvertFrom-PSBoundParameters -Property SAMAccountName, GivenName, Surname, AccountPassword, Company, Department, Title -AsHashTable
+    
+            New-ADUser @ADUserParameters `
+                -Name "$GivenName $Surname" `
+                -UserPrincipalName $UserPrincipalName `
+                -ChangePasswordAtLogon $true `
+                -Enabled $true
+            
+            $ADUser = Get-TervisADUser -Identity $SAMAccountName -IncludeMailboxProperties
+            Sync-ADDomainControllers -Blocking
+        } elseif (-not $ADUser -and $UseExistingADUser) {
+            Throw "$SAMAccountName doesn't exist but `$UseExistingADUser switch used"
+        }
+        
+        if ($SAMAccountNameToBeLike) {
+            Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
+        }
+    
+        if (-not $Contractor -and -not $ADUserAccountCreationOnly) {
+            New-TervisMSOLUser -ADUser $ADUser -UserHasTheirOwnDedicatedComputer:$UserHasTheirOwnDedicatedComputer
+        }
     }
 }
 
