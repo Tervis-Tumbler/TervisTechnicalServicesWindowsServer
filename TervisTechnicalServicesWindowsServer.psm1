@@ -100,7 +100,7 @@ function New-TervisWindowsUser {
             Copy-ADUserGroupMembership -Identity $SAMAccountNameToBeLike -DestinationIdentity $SAMAccountName
         }
     
-        if (-not $Contractor -and -not $ADUserAccountCreationOnly) {
+        if (-not ($Type -eq "Contractor") -and -not $ADUserAccountCreationOnly) {
             New-TervisMSOLUser -ADUser $ADUser -UserHasTheirOwnDedicatedComputer:$UserHasTheirOwnDedicatedComputer
         }
     }
