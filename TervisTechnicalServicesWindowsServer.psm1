@@ -40,6 +40,7 @@ function New-TervisWindowsUser {
         [Parameter(Mandatory)]
         [System.Security.SecureString]$AccountPassword,
 
+        $Title,
         $Company,
         [switch]$UserHasTheirOwnDedicatedComputer,
         [switch]$ADUserAccountCreationOnly
@@ -57,7 +58,6 @@ function New-TervisWindowsUser {
 
         if (-not $UseExistingADUser -and $Type -eq "Employee") {
             New-DynamicParameter -Name Department -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
-            New-DynamicParameter -Name Title -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
         }
 
         $DynamicParameters
@@ -122,7 +122,7 @@ function New-TervisContractor {
     }
     process {
         New-DynamicParameter -CreateVariables -BoundParameters $PSBoundParameters
-        New-TervisPerson @PsBoundParameters -Contractor
+        New-TervisPerson @PsBoundParameters -Type Contractor
     }
 }
 
