@@ -47,7 +47,7 @@ function New-TervisWindowsUser {
     )
     DynamicParam {
         $DynamicParameters = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
-        if ($Type -eq "Employee") {
+        if (($Type -eq "Employee") -or ($Type -eq "Contractor")) {
             New-DynamicParameter -Name UseExistingADUser -Type Switch -ParameterSetName UseExistingADUser -Dictionary $DynamicParameters
             New-DynamicParameter -Name SAMAccountNameToBeLike -Type String -ParameterSetName NewADUser -Dictionary $DynamicParameters
         }
