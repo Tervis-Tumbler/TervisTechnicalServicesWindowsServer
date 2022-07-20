@@ -117,6 +117,7 @@ function New-TervisContractor {
         [parameter(mandatory)]$SurName,
         [parameter(Mandatory)]$ExternalEmailAddress,
         [parameter(mandatory)]$ManagerSAMAccountName,
+        $SAMAccountNameToBeLike,
         [parameter(mandatory)]$Title
     )
     DynamicParam {
